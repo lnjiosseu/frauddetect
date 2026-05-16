@@ -1,0 +1,164 @@
+---
+title: "FraudDetect: Financial Transaction Fraud Detection & Risk Analytics"
+author: "Ludovic Njiosseu, MS Biostatistics"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    theme: flatly
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+## Overview
+
+This project builds a production-grade fraud detection and risk analytics pipeline on a simulated dataset of 10,000 financial transactions. It replicates core workflows used in financial services risk teams: feature engineering, class-imbalance correction, ensemble modeling, anomaly scoring, and risk segmentation.
+
+**Key results:**
+
+| Metric | Value |
+|---|---|
+| Ensemble AUC-ROC | See `outputs/model_results.csv` |
+| FP Rate Reduction vs Rule-Based Baseline | See `outputs/key_metrics.csv` |
+| Anomalies Flagged (top 10% isolation score) | See `outputs/risk_tier_summary.csv` |
+
+---
+
+## Module 1 — Data Simulation
+
+```{r}
+source("scripts/01_simulate_data.R")
+```
+
+The simulation generates realistic transaction data with known fraud-generating logic:
+- **Fraud drivers**: international transactions, night-time activity, device mismatch, prior fraud history, high velocity
+- **Merchant categories**: 8 categories with varying baseline risk
+- **Fraud rate**: ~5–8%, reflecting real-world class imbalance
+
+---
+
+## Module 2 — Exploratory Analysis & Feature Engineering
+
+```{r}
+source("scripts/02_eda_features.R")
+```
+
+### Fraud by Merchant Category
+
+```{r}
+library(tidyverse)
+fraud_by_cat <- read_csv("outputs/fraud_by_category.csv", show_col_types = FALSE)
+fraud_by_cat %>%
+  mutate(merchant_category = fct_reorder(merchant_category, fraud_rate)) %>%
+  ggplot(aes(x = merchant_category, y = fraud_rate, fill = fraud_rate)) +
+  geom_col() + coord_flip() +
+  scale_fill_gradient(low = "#27ae60", high = "#e74c3c") +
+  labs(title = "Fraud Rate by Merchant Category",
+       x = NULL, y = "Fraud Rate (%)") +
+  theme_minimal() + theme(legend.position = "none")
+```
+
+### Feature Correlations with Fraud
+
+```{r}
+feat_corr <- read_csv("outputs/feature_correlations.csv", show_col_types = FALSE)
+feat_corr %>%
+  mutate(feature = fct_reorder(feature, abs(correlation_with_fraud))) %>%
+  ggplot(aes(x = feature, y = correlation_with_fraud,
+             fill = correlation_with_fraud > 0)) +
+  geom_col() + coord_flip() +
+  scale_fill_manual(values = c("#2980b9", "#e74c3c"),
+                    labels = c("Negative", "Positive")) +
+  labs(title = "Feature Correlations with Fraud Label",
+       x = NULL, y = "Pearson Correlation", fill = "Direction") +
+  theme_minimal()
+```
+
+---
+
+## Module 3 — Modeling
+
+```{r}
+source("scripts/03_modeling.R")
+```
+
+### Model Comparison
+
+```{r}
+model_results <- read_csv("outputs/model_results.csv", show_col_types = FALSE)
+knitr::kable(model_results, caption = "AUC-ROC by Model")
+```
+
+**Approach:** Logistic regression and a bagged decision stump ensemble (RF proxy) are trained on an oversampled balanced training set (minority class oversampled to ~20%). The final prediction is a probability average of both models.
+
+**Threshold selection:** Youden's J statistic (maximizes sensitivity + specificity − 1) is used to identify the optimal classification threshold rather than defaulting to 0.5.
+
+### Feature Importance
+
+```{r}
+feat_imp <- read_csv("outputs/feature_importance.csv", show_col_types = FALSE)
+feat_imp %>%
+  mutate(feature = fct_reorder(feature, abs(coefficient)),
+         direction = ifelse(coefficient > 0, "Increases Risk", "Decreases Risk")) %>%
+  ggplot(aes(x = feature, y = coefficient, fill = direction)) +
+  geom_col() + coord_flip() +
+  scale_fill_manual(values = c("Increases Risk" = "#e74c3c",
+                               "Decreases Risk" = "#2980b9")) +
+  labs(title = "Logistic Regression Coefficients",
+       x = NULL, y = "Log-Odds Coefficient", fill = NULL) +
+  theme_minimal()
+```
+
+---
+
+## Module 4 — Anomaly Scoring & Risk Segmentation
+
+```{r}
+source("scripts/04_anomaly_risk.R")
+```
+
+### Risk Tier Distribution
+
+```{r}
+risk_tiers <- read_csv("outputs/risk_tier_summary.csv", show_col_types = FALSE)
+knitr::kable(risk_tiers, caption = "Risk Tier Summary")
+```
+
+### Top Risk Segments
+
+```{r}
+risk_segs <- read_csv("outputs/risk_segments.csv", show_col_types = FALSE)
+head(risk_segs, 15) %>%
+  knitr::kable(caption = "Top 15 Risk Segments by Fraud Rate")
+```
+
+**Anomaly scoring** uses an isolation-forest-inspired approach: transactions are scored by their average path length under random recursive splits. Combined with z-score thresholding on transaction amount, this yields a dual-signal anomaly flag with reduced false-positive rate versus a rule-based amount threshold alone.
+
+---
+
+## Reproducibility
+
+All code is modular and documented. Run scripts in order from the project root:
+
+```r
+source("scripts/01_simulate_data.R")
+source("scripts/02_eda_features.R")
+source("scripts/03_modeling.R")
+source("scripts/04_anomaly_risk.R")
+shiny::runApp("shiny/")
+```
+
+Required packages: `tidyverse`, `pROC`, `shiny`, `bslib`, `bsicons`, `DT`
+
+---
+
+## Limitations & Extensions
+
+- The dataset is simulated; real-world deployment would require calibration on live transaction data and ongoing model monitoring for distribution shift.
+- The bagged stump ensemble is a pedagogical RF proxy — production deployment would use `ranger` or `xgboost`.
+- Temporal features (transaction sequence, recency) are not modeled here but are critical in production fraud systems.
+- No survival/time-to-fraud analysis is included; this would be a natural extension for account-level risk modeling.

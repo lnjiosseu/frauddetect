@@ -1,0 +1,8 @@
+data/
+outputs/
+plots/
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+renv/library/
