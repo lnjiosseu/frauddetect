@@ -70,7 +70,7 @@ This project replicates that full stack — from raw transaction data to a risk-
 
 ```
 frauddetect/
-├── R/
+├── scripts/
 │   ├── 01_simulate_data.R      # Transaction dataset generation
 │   ├── 02_eda_features.R       # EDA, fraud profiling, feature correlations
 │   ├── 03_modeling.R           # LR + RF ensemble, AUC-ROC, threshold selection
@@ -92,10 +92,10 @@ frauddetect/
 install.packages(c("tidyverse", "pROC", "shiny", "bslib", "bsicons", "DT"))
 
 # Run in order from project root
-source("R/01_simulate_data.R")
-source("R/02_eda_features.R")
-source("R/03_modeling.R")
-source("R/04_anomaly_risk.R")
+source("scripts/01_simulate_data.R")
+source("scripts/02_eda_features.R")
+source("scripts/03_modeling.R")
+source("scripts/04_anomaly_risk.R")
 
 # Launch dashboard
 shiny::runApp("shiny/")
