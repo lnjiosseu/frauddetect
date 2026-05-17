@@ -1,6 +1,6 @@
 # FraudDetect: Financial Transaction Fraud Detection & Risk Analytics
 
-A portfolio project replicating production risk workflows in financial services — built end-to-end in R, covering feature engineering, class-imbalance correction, ensemble modeling, anomaly scoring, and risk segmentation.
+A portfolio project replicating production risk workflows in financial services - built end-to-end in R, covering feature engineering, class-imbalance correction, ensemble modeling, anomaly scoring, and risk segmentation.
 
 ---
 
@@ -8,28 +8,28 @@ A portfolio project replicating production risk workflows in financial services 
 
 Fraud detection in financial services sits at the intersection of statistical rigor, operational constraints, and business cost trade-offs. False negatives (missed fraud) cost money; false positives (wrongly flagged transactions) cost customers. Most production pipelines balance both through ensemble models, optimal threshold selection, and layered anomaly scoring.
 
-This project replicates that full stack — from raw transaction data to a risk-scored dashboard — using only R and standard statistical methods.
+This project replicates that full stack - from raw transaction data to a risk-scored dashboard - using only R and standard statistical methods.
 
 ---
 
 ## What It Does
 
-**Module 1 — Data Simulation**
+**Module 1 - Data Simulation**
 - Generates 10,000 realistic financial transactions with merchant category, geography, time-of-day, device signals, and velocity features
 - Embeds fraud-generating logic (international transactions, night activity, device mismatch, prior fraud history) at controlled rates
 
-**Module 2 — EDA & Feature Engineering**
+**Module 2 - EDA & Feature Engineering**
 - Fraud rate profiling by merchant category, geography, and time of day
 - Amount z-score computation within merchant category groups
 - Feature correlation analysis against fraud label
 
-**Module 3 — Modeling**
+**Module 3 - Modeling**
 - Logistic regression and bagged decision stump ensemble (RF proxy)
 - SMOTE-style oversampling to address class imbalance (~5–8% fraud rate)
 - Youden's J threshold optimization for classification
 - Confusion matrix, sensitivity, specificity, and FP rate comparison vs rule-based baseline
 
-**Module 4 — Anomaly Scoring & Risk Segmentation**
+**Module 4 - Anomaly Scoring & Risk Segmentation**
 - Isolation forest-inspired anomaly scoring (pure base R)
 - Dual-signal anomaly flag (isolation score + amount z-score)
 - Risk tier assignment (High / Medium / Low) and segment-level profiling
@@ -108,7 +108,7 @@ quarto::quarto_render("frauddetect_report.qmd")
 
 ## Why This Matters for Risk Teams
 
-The statistical problems this project addresses — class imbalance correction, threshold calibration, layered anomaly scoring, and risk segmentation — are foundational to production fraud and AML pipelines. Building them from first principles in R, without leaning on black-box AutoML packages, demonstrates both the statistical reasoning and the engineering discipline required for regulatory-grade risk work.
+The statistical problems this project addresses - class imbalance correction, threshold calibration, layered anomaly scoring, and risk segmentation - are foundational to production fraud and AML pipelines. Building them from first principles in R, without leaning on black-box AutoML packages, demonstrates both the statistical reasoning and the engineering discipline required for regulatory-grade risk work.
 
 ---
 

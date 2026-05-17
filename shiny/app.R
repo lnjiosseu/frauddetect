@@ -5,10 +5,6 @@
 # Clear environment
 #rm(list = ls())
 
-if (interactive()) {
-  setwd(file.path(dirname(rstudioapi::getActiveDocumentContext()$path), ".."))
-}
-
 library(shiny)
 library(bslib)
 library(tidyverse)
@@ -16,16 +12,16 @@ library(tidyverse)
 # Load data (run scripts first to generate outputs/)
 load_data <- function() {
   list(
-    transactions  = read_csv("data/transactions_scored.csv",  show_col_types = FALSE),
-    model_results = read_csv("outputs/model_results.csv",     show_col_types = FALSE),
-    key_metrics   = read_csv("outputs/key_metrics.csv",       show_col_types = FALSE),
-    fraud_by_cat  = read_csv("outputs/fraud_by_category.csv", show_col_types = FALSE),
-    fraud_by_time = read_csv("outputs/fraud_by_time.csv",     show_col_types = FALSE),
-    fraud_by_geo  = read_csv("outputs/fraud_by_geography.csv",show_col_types = FALSE),
-    risk_tiers    = read_csv("outputs/risk_tier_summary.csv", show_col_types = FALSE),
-    risk_segments = read_csv("outputs/risk_segments.csv",     show_col_types = FALSE),
-    feat_imp      = read_csv("outputs/feature_importance.csv",show_col_types = FALSE),
-    test_preds    = read_csv("outputs/test_predictions.csv",  show_col_types = FALSE)
+    transactions  = read_csv("../data/transactions_scored.csv",  show_col_types = FALSE),
+    model_results = read_csv("../outputs/model_results.csv",     show_col_types = FALSE),
+    key_metrics   = read_csv("../outputs/key_metrics.csv",       show_col_types = FALSE),
+    fraud_by_cat  = read_csv("../outputs/fraud_by_category.csv", show_col_types = FALSE),
+    fraud_by_time = read_csv("../outputs/fraud_by_time.csv",     show_col_types = FALSE),
+    fraud_by_geo  = read_csv("../outputs/fraud_by_geography.csv",show_col_types = FALSE),
+    risk_tiers    = read_csv("../outputs/risk_tier_summary.csv", show_col_types = FALSE),
+    risk_segments = read_csv("../outputs/risk_segments.csv",     show_col_types = FALSE),
+    feat_imp      = read_csv("../outputs/feature_importance.csv",show_col_types = FALSE),
+    test_preds    = read_csv("../outputs/test_predictions.csv",  show_col_types = FALSE)
   )
 }
 
