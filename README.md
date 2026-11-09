@@ -18,7 +18,7 @@ Fraud detection is not only a classification problem. A useful alerting workflow
 
 This project makes those trade-offs inspectable rather than presenting a single model score as the whole solution.
 
-## Dataset
+## Dataset and evaluation design
 
 The project uses 10,000 simulated transactions with fields covering transaction amount, merchant category, geography, time of day, prior fraud indicators, transaction velocity, device mismatch, and account age.
 
@@ -86,23 +86,44 @@ The cost ranking is conditional on these assumptions. It should not be treated a
 
 ## Interactive dashboard
 
-The dashboard source is available in [`shiny/app.R`](shiny/app.R). The analytical report source is available in [`frauddetect_report.qmd`](frauddetect_report.qmd). To generate the standalone HTML report locally, run:
+The dashboard source is available in [`shiny/app.R`](shiny/app.R). It contains six main navigation sections.
+
+### Dashboard sections
+
+1. **Executive Overview:** held-out test scope, fraud prevalence, XGBoost test PR-AUC, investigation capacity, and high-level transaction patterns.
+2. **Fraud Patterns:** fraud rates by merchant category, time of day, and geography, plus transaction amount distributions.
+3. **Predictive Modeling:** held-out ROC-AUC and PR-AUC comparison, model performance metrics, and Random Forest permutation importance.
+4. **Anomaly Policies:** precision-recall trade-offs and test-set comparisons across Isolation Forest and combined alert strategies.
+5. **Financial Impact:** editable investigation capacity, feasible policy comparisons, policy-level cost breakdown, sensitivity analysis, and modeling assumptions.
+6. **Transaction Explorer:** filters and transaction-level inspection of held-out test predictions, anomaly scores, and actual outcomes.
+
+The dashboard reads corrected pipeline outputs from `corrected_r/outputs/`. Run the analysis scripts before launching it.
+
+### Dashboard gallery
+
+Dashboard screenshots have **not yet been added to this repository branch**. Once captured from the running corrected Shiny app, save them under `docs/screenshots/` using the filenames below, then replace this checklist with the image gallery.
+
+| Dashboard section | Screenshot filename |
+|---|---|
+| Executive Overview | `01-executive-overview.png` |
+| Fraud Patterns | `02-fraud-patterns.png` |
+| Predictive Modeling | `03-predictive-modeling.png` |
+| Anomaly Policies | `04-anomaly-policies.png` |
+| Financial Impact. Cost & Policy Analysis | `05-financial-impact-cost-policy.png` |
+| Financial Impact. Sensitivity & Assumptions | `06-financial-impact-sensitivity.png` |
+| Transaction Explorer | `07-transaction-explorer.png` |
+
+## Quarto analytical report
+
+The reproducible report source is available in [`frauddetect_report.qmd`](frauddetect_report.qmd). It documents the corrected script inventory, data partition and evaluation design, supervised model comparison, anomaly-policy trade-offs, cost-sensitive investigation scenarios, and methodological limitations.
+
+Render the standalone HTML report locally after running the corrected analysis scripts:
 
 ```r
 quarto::quarto_render("frauddetect_report.qmd")
 ```
 
-
-The Shiny dashboard contains six sections:
-
-1. **Executive Overview:** held-out test scope, fraud prevalence, model summary, and high-level patterns.
-2. **Fraud Patterns:** fraud rates by merchant category, time of day, and geography, plus transaction amount distributions.
-3. **Predictive Modeling:** test ROC-AUC and PR-AUC, model metrics, and Random Forest permutation importance.
-4. **Anomaly Policies:** precision-recall trade-offs and test-set comparisons across anomaly and combined alert strategies.
-5. **Financial Impact:** editable investigation capacity, cost assumptions, feasible policy comparisons, sensitivity analysis, and model limitations.
-6. **Transaction Explorer:** filters and transaction-level inspection of held-out test predictions.
-
-The dashboard reads the corrected pipeline outputs from `corrected_r/outputs/`. Run the analysis scripts before launching it.
+The rendered HTML report is generated locally. It is not implied to be publicly hosted.
 
 ## Repository structure
 
