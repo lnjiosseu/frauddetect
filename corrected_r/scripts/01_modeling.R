@@ -104,8 +104,10 @@ best_nrounds <- if (!is.null(xgb_model$best_iteration)) {
 } else {
   xgb_model$niter
 }
-xgb_valid_prob <- predict(xgb_model, dvalid, iterationrange = c(1, best_nrounds + 1))
-xgb_test_prob <- predict(xgb_model, dtest, iterationrange = c(1, best_nrounds + 1))
+# Explicit integer bounds avoid JSON type-coercion issues in some xgboost R builds.
+iteration_range <- as.integer(c(1L, best_nrounds + 1L))
+xgb_valid_prob <- predict(xgb_model, dvalid, iterationrange = iteration_range)
+xgb_test_prob <- predict(xgb_model, dtest, iterationrange = iteration_range)
 
 # Keep the equal-weight blend as a comparator, not as the assumed champion.
 valid_probs <- list(
