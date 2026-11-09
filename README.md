@@ -125,16 +125,19 @@ The original implementation is retained separately for reference. The `corrected
 Run commands from the repository root. Ensure `data/transactions.csv` is present. The setup script called by the modeling script installs missing modeling packages.
 
 ```r
-# 1. Fit models, select validation thresholds, and export predictions
+# 1. Generate the 10,000-row simulated dataset (if data/transactions.csv is absent)
+source("scripts/01_simulate_data.R")
+
+# 2. Fit models, select validation thresholds, and export predictions
 source("corrected_r/scripts/01_modeling.R")
 
-# 2. Fit Isolation Forest on training features and evaluate validation-derived thresholds
+# 3. Fit Isolation Forest on training features and evaluate validation-derived thresholds
 source("corrected_r/scripts/04_optimize_anomaly_thresholds.R")
 
-# 3. Calculate illustrative policy costs and sensitivity scenarios
+# 4. Calculate illustrative policy costs and sensitivity scenarios
 source("corrected_r/scripts/05_cost_sensitive_alert_optimization.R")
 
-# 4. Launch the dashboard
+# 5. Launch the dashboard
 shiny::runApp("shiny/")
 ```
 
