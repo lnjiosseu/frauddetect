@@ -131,9 +131,8 @@ ui <- page_navbar(
       #sensitivity_table th:nth-child(5) { width: 28%; }
       #assumptions_table th:first-child, #assumptions_table td:first-child { width: 62%; }
       .financial-note { line-height: 1.45; margin-top: .75rem; }
-      #cost_plot { display: block; width: 100%; min-height: 520px; }
-      #cost_plot .shiny-plot-output { min-height: 520px; }
-      .card:has(#cost_plot) { overflow: visible; }
+      #cost_plot { display: block; width: 100%; min-height: 440px; }
+      #cost_plot .shiny-plot-output { min-height: 440px; }
     ")),
     tags$p("Corrected R pipeline | Held-out test evaluation | Simulated transaction data",
            class = "text-muted small mb-2")
@@ -232,7 +231,10 @@ ui <- page_navbar(
     ),
     card(
       card_header("Lowest estimated-cost policies within capacity"),
-      plotOutput("cost_plot", height = 520),
+      plotOutput("cost_plot", height = 440)
+    ),
+    card(
+      card_header("Policy-level cost breakdown"),
       DTOutput("cost_table")
     ),
     card(
