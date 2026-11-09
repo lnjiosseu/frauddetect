@@ -97,10 +97,17 @@ ui <- page_navbar(
   header = tags$div(
     class = "container-fluid",
     tags$style(HTML("
-      .financial-kpi-card { min-height: 150px; height: auto; padding: 1rem;
-        border: 1px solid #d9dee3; border-radius: .5rem; background: #fff;
-        display: flex; flex-direction: column; justify-content: flex-start;
+      .financial-kpi-card { min-height: 190px !important; height: 190px !important;
+        box-sizing: border-box; padding: 1rem; border: 1px solid #d9dee3;
+        border-radius: .5rem; background: #fff; display: flex;
+        flex-direction: column; justify-content: flex-start;
         gap: .65rem; overflow: visible; }
+      .financial-kpi-card .shiny-input-container {
+        display: block !important; width: 100% !important; min-height: 74px;
+        flex: 0 0 auto; }
+      .financial-kpi-card input.form-control {
+        display: block !important; width: 100% !important; min-height: 38px;
+        visibility: visible !important; opacity: 1 !important; }
       .financial-kpi-title { font-size: .95rem; font-weight: 600; color: #344054; }
       .financial-kpi-value { display: block; font-size: clamp(1.35rem, 1.8vw, 1.8rem);
         line-height: 1.25; font-weight: 650; overflow-wrap: anywhere; color: #243447; }
@@ -197,8 +204,9 @@ ui <- page_navbar(
       col_widths = c(5, 3, 4),
       div(class = "financial-kpi-card",
         div(class = "financial-kpi-title", "Investigation capacity"),
-        numericInput("capacity", "Maximum alerts investigators can review",
-                     value = 500, min = 1, max = nrow(transactions), step = 25),
+        numericInput("capacity", "Maximum alerts",
+                     value = 500, min = 1, max = nrow(transactions),
+                     step = 25, width = "100%"),
         p(class = "financial-kpi-note",
           "Policies above this alert limit are excluded.")
       ),
