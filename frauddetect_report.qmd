@@ -22,9 +22,10 @@ This report documents the corrected FraudDetect analytical workflow using 10,000
 
 ## Reproducibility and inputs
 
-Run the corrected pipeline from the repository root before rendering this report:
+If `data/transactions.csv` does not exist, generate the simulated dataset first. Then run the corrected pipeline from the repository root before rendering this report:
 
 ```r
+source("scripts/01_simulate_data.R")
 source("corrected_r/scripts/01_modeling.R")
 source("corrected_r/scripts/04_optimize_anomaly_thresholds.R")
 source("corrected_r/scripts/05_cost_sensitive_alert_optimization.R")
