@@ -104,10 +104,11 @@ best_nrounds <- if (!is.null(xgb_model$best_iteration)) {
 } else {
   xgb_model$niter
 }
-# Explicit integer bounds avoid JSON type-coercion issues in some xgboost R builds.
-iteration_range <- as.integer(c(1L, best_nrounds + 1L))
-xgb_valid_prob <- predict(xgb_model, dvalid, iterationrange = iteration_range)
-xgb_test_prob <- predict(xgb_model, dtest, iterationrange = iteration_range)
+# Use the package's default prediction range. This avoids an iterationrange
+# serialization incompatibility observed with the installed xgboost 3.2.x build.
+# Early stopping was still applied during training using the validation set.
+xgb_valid_prob <- predict(xgb_model, dvalid)
+xgb_test_prob <- predict(xgb_model, dtest)
 
 # Keep the equal-weight blend as a comparator, not as the assumed champion.
 valid_probs <- list(
