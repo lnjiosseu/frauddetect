@@ -206,48 +206,54 @@ ui <- page_navbar(
   ),
 
   nav_panel("Financial Impact",
-    div(class = "financial-kpi-row",
-      div(class = "financial-kpi-card",
-        div(class = "financial-kpi-title", "Investigation capacity"),
-        numericInput("capacity", "Maximum alerts",
-                     value = 500, min = 1, max = nrow(transactions),
-                     step = 25, width = "100%"),
-        p(class = "financial-kpi-note",
-          "Policies above this alert limit are excluded.")
+    navset_card_tab(
+      nav_panel("Cost & Policy Analysis",
+        div(class = "financial-kpi-row",
+          div(class = "financial-kpi-card",
+            div(class = "financial-kpi-title", "Investigation capacity"),
+            numericInput("capacity", "Maximum alerts",
+                         value = 500, min = 1, max = nrow(transactions),
+                         step = 25, width = "100%"),
+            p(class = "financial-kpi-note",
+              "Policies above this alert limit are excluded.")
+          ),
+          div(class = "financial-kpi-card",
+            div(class = "financial-kpi-title", "Review cost per alert"),
+            div(class = "financial-kpi-value",
+                fmt_money(as.numeric(assumptions$value[assumptions$assumption == "cost_per_alert_review"][1]))),
+            p(class = "financial-kpi-note", "Illustrative investigation cost.")
+          ),
+          div(class = "financial-kpi-card",
+            div(class = "financial-kpi-title", "Recovery assumption"),
+            div(class = "financial-kpi-value",
+                fmt_pct(as.numeric(assumptions$value[assumptions$assumption == "recovery_share_when_detected"][1]))),
+            p(class = "financial-kpi-note",
+              "Assumed share of detected fraud exposure prevented or recovered.")
+          )
+        ),
+        card(
+          card_header("Lowest estimated-cost policies within capacity"),
+          plotOutput("cost_plot", height = 440)
+        ),
+        card(
+          card_header("Policy-level cost breakdown"),
+          DTOutput("cost_table")
+        )
       ),
-      div(class = "financial-kpi-card",
-        div(class = "financial-kpi-title", "Review cost per alert"),
-        div(class = "financial-kpi-value",
-            fmt_money(as.numeric(assumptions$value[assumptions$assumption == "cost_per_alert_review"][1]))),
-        p(class = "financial-kpi-note", "Illustrative investigation cost.")
-      ),
-      div(class = "financial-kpi-card",
-        div(class = "financial-kpi-title", "Recovery assumption"),
-        div(class = "financial-kpi-value",
-            fmt_pct(as.numeric(assumptions$value[assumptions$assumption == "recovery_share_when_detected"][1]))),
-        p(class = "financial-kpi-note",
-          "Assumed share of detected fraud exposure prevented or recovered.")
+      nav_panel("Sensitivity & Assumptions",
+        card(
+          card_header("Sensitivity analysis"),
+          p(class = "text-muted small",
+            "Lowest estimated-cost policy for each review-cost and recovery scenario, after applying the investigation-capacity limit."),
+          tableOutput("sensitivity_table")
+        ),
+        card(
+          card_header("Modeling assumptions and limitations"),
+          tableOutput("assumptions_table"),
+          p(class = "text-muted small financial-note",
+            "These are scenario estimates, not measured bank losses, actual recoveries, or verified operational costs. Transaction amount is used as a proxy for fraud exposure. Validate assumptions with institution-specific data before operational use.")
+        )
       )
-    ),
-    card(
-      card_header("Lowest estimated-cost policies within capacity"),
-      plotOutput("cost_plot", height = 440)
-    ),
-    card(
-      card_header("Policy-level cost breakdown"),
-      DTOutput("cost_table")
-    ),
-    card(
-      card_header("Sensitivity analysis"),
-      p(class = "text-muted small",
-        "Lowest estimated-cost policy for each review-cost and recovery scenario, after applying the investigation-capacity limit."),
-      tableOutput("sensitivity_table")
-    ),
-    card(
-      card_header("Modeling assumptions and limitations"),
-      tableOutput("assumptions_table"),
-      p(class = "text-muted small financial-note",
-        "These are scenario estimates, not measured bank losses, actual recoveries, or verified operational costs. Transaction amount is used as a proxy for fraud exposure. Validate assumptions with institution-specific data before operational use.")
     )
   ),
 
