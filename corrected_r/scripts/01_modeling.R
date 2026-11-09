@@ -93,34 +93,23 @@ xgb_params <- list(
   scale_pos_weight = positive_weight
 )
 
-# Stage 1: select the number of boosting rounds using validation data.
-xgb_tuning_model <- xgb.train(
+# Early stopping with save_best=TRUE returns a booster sliced to its
+# validation-selected best iteration. This avoids depending on best_iteration
+# metadata fields that differ across xgboost R package versions.
+xgb_model <- xgb.train(
   params = xgb_params,
   data = dtrain,
   nrounds = 500,
   evals = list(validation = dvalid),
-  early_stopping_rounds = 30,
-  verbose = 0
-)
-
-# In xgboost 3.2.1.1, the early-stopping best_iteration metadata can be
-# serialized as text and cause predict() to fail while reading iteration_end.
-# Convert the selected round count explicitly, then refit a clean model with
-# that fixed number of rounds and no early-stopping metadata.
-best_nrounds <- xgb_tuning_model$best_iteration
-if (is.null(best_nrounds) || length(best_nrounds) != 1L ||
-    is.na(suppressWarnings(as.integer(best_nrounds)))) {
-  best_nrounds <- xgb_tuning_model$niter
-}
-best_nrounds <- as.integer(best_nrounds)
-if (best_nrounds < 1L) stop("XGBoost selected an invalid number of boosting rounds.")
-
-# Stage 2: refit on training data only. Validation chose the round count;
-# validation and test observations are not added to the refit.
-xgb_model <- xgb.train(
-  params = xgb_params,
-  data = dtrain,
-  nrounds = best_nrounds,
+  callbacks = list(
+    xgb.cb.early.stop(
+      stopping_rounds = 30,
+      maximize = TRUE,
+      metric_name = "validation_aucpr",
+      save_best = TRUE,
+      verbose = FALSE
+    )
+  ),
   verbose = 0
 )
 xgb_valid_prob <- as.numeric(predict(xgb_model, dvalid))
@@ -211,8 +200,7 @@ readr::write_csv(
 )
 saveRDS(
   list(random_forest = rf, xgboost = xgb_model,
-       thresholds = thresholds, best_xgboost_rounds = best_nrounds,
-       predictors = predictors, seed = 2026),
+       thresholds = thresholds, predictors = predictors, seed = 2026),
   "corrected_r/outputs/models.rds"
 )
 
