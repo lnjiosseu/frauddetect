@@ -229,7 +229,7 @@ ui <- page_navbar(
     ),
     card(
       card_header("Lowest estimated-cost policies within capacity"),
-      plotOutput("cost_plot", height = 260),
+      plotOutput("cost_plot", height = 440),
       DTOutput("cost_table")
     ),
     card(
@@ -399,9 +399,19 @@ server <- function(input, output, session) {
     ggplot(dat, aes(x = reorder(str_replace_all(strategy, "_", " "),
                                 estimated_total_cost),
                     y = estimated_total_cost)) +
-      geom_col(fill = PAL$green) + coord_flip() +
-      scale_y_continuous(labels = label_dollar()) +
-      labs(x = NULL, y = "Estimated total cost") + theme_minimal()
+      geom_col(fill = PAL$green, width = 0.68) +
+      coord_flip(clip = "off") +
+      scale_y_continuous(labels = label_dollar(),
+                         expand = expansion(mult = c(0, 0.08))) +
+      labs(x = NULL, y = "Estimated total cost") +
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.y = element_text(size = 10, lineheight = 1.05),
+        axis.text.x = element_text(size = 9),
+        axis.title.x = element_text(size = 10, margin = margin(t = 8)),
+        panel.grid.major.y = element_blank(),
+        plot.margin = margin(12, 24, 12, 12)
+      )
   })
   output$cost_table <- renderDT({
     dat <- feasible_costs()
