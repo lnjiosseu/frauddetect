@@ -188,6 +188,16 @@ for (model_name in names(test_probs)) {
 }
 readr::write_csv(prediction_output, "corrected_r/outputs/test_predictions.csv")
 
+# Save validation predictions separately for anomaly-threshold selection.
+validation_output <- tibble(
+  transaction_id = validation$transaction_id,
+  actual = validation$is_fraud,
+  xgboost_probability = as.numeric(xgb_valid_prob),
+  xgboost_predicted = as.integer(xgb_valid_prob >= thresholds[["XGBoost"]])
+)
+readr::write_csv(validation_output,
+                 "corrected_r/outputs/validation_predictions.csv")
+
 # Validation-selected thresholds and model artifacts for reproducibility.
 readr::write_csv(
   tibble(model = names(thresholds), validation_threshold = unname(thresholds)),
