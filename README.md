@@ -184,7 +184,7 @@ Key methodological choices include stratified data partitioning, validation-base
 
 ## Author
 
-**Ludovic Njiosseu** | MS Statistics, NYU | Data Scientist & Statistician
+**Ludovic Njiosseu** | MPH (Biostatistics), NYU | Data Scientist & Statistician
 
 5+ years of experience across clinical research, pharmaceuticals, statistical analysis, and data science.
 
