@@ -6,3 +6,4 @@ plots/
 .RData
 .Ruserdata
 renv/library/
+corrected_r/outputs/
