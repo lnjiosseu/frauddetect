@@ -211,7 +211,7 @@ ui <- page_navbar(
 )
 
 server <- function(input, output, session) {
-  output$overview_capacity <- renderText(fmt_num(input$capacity %||% 500))
+  output$overview_capacity <- renderText(fmt_num(if (is.null(input$capacity)) 500 else input$capacity))
 
   fraud_rates <- function(data, group) {
     data |>
