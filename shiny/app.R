@@ -24,7 +24,8 @@ read_required <- function(path) {
   if (!file.exists(path)) {
     stop(
       "Required input is missing: ", path,
-      "\nRun corrected_r/scripts/01_modeling.R, ",
+      "
+Run corrected_r/scripts/01_modeling.R, ",
       "04_optimize_anomaly_thresholds.R, and ",
       "05_cost_sensitive_alert_optimization.R from the repository root."
     )
@@ -245,7 +246,7 @@ ui <- page_navbar(
           card_header("Sensitivity analysis"),
           p(class = "text-muted small",
             "Lowest estimated-cost policy for each review-cost and recovery scenario, after applying the investigation-capacity limit."),
-          DTOutput("sensitivity_table")
+          tableOutput("sensitivity_table")
         ),
         card(
           card_header("Modeling assumptions and limitations"),
@@ -333,7 +334,9 @@ server <- function(input, output, session) {
 
   output$model_auc <- renderPlot({
     model_metrics |>
-      mutate(model = recode(model, Random_Forest = "Random Forest",\n                            Equal_Weight_Blend = "Equal-weight Blend")) |>\n      select(model, test_roc_auc, test_pr_auc) |>
+      mutate(model = recode(model, Random_Forest = "Random Forest",
+                            Equal_Weight_Blend = "Equal-weight Blend")) |>
+      select(model, test_roc_auc, test_pr_auc) |>
       pivot_longer(-model, names_to = "metric", values_to = "value") |>
       mutate(metric = recode(metric, test_roc_auc = "ROC-AUC", test_pr_auc = "PR-AUC")) |>
       ggplot(aes(x = reorder(model, value), y = value, fill = metric)) +
@@ -342,7 +345,9 @@ server <- function(input, output, session) {
       labs(x = NULL, y = "Score", fill = NULL) + theme_minimal()
   })
   output$model_table <- renderDT({
-    display_metrics <- model_metrics |>\n      mutate(model = recode(model, Random_Forest = "Random Forest",\n                            Equal_Weight_Blend = "Equal-weight Blend")) |>
+    display_metrics <- model_metrics |>
+      mutate(model = recode(model, Random_Forest = "Random Forest",
+                            Equal_Weight_Blend = "Equal-weight Blend")) |>
       select(model, test_roc_auc, test_pr_auc, precision, recall, specificity) |>
       rename(
         `Model` = model,
@@ -455,11 +460,10 @@ server <- function(input, output, session) {
                       "estimated_total_cost"), currency = "$")
   })
 
-  output$sensitivity_table <- renderDT({
+  output$sensitivity_table <- renderTable({
     # Apply the capacity constraint before selecting the lowest-cost policy.
     if (!"alerts" %in% names(sensitivity)) {
-      return(datatable(data.frame(Note = "Sensitivity output lacks alert counts."),
-                       rownames = FALSE, options = list(dom = "t")))
+      return(data.frame(Note = "Sensitivity output lacks alert counts."))
     }
     best <- sensitivity |>
       filter(alerts <= capacity()) |>
@@ -477,11 +481,9 @@ server <- function(input, output, session) {
     if (nrow(best) == 0) {
       best <- data.frame(Note = "No policy meets the current investigation capacity. Increase the capacity to view scenario results.")
     }
-    datatable(best, rownames = FALSE,
-      options = list(dom = "t", paging = FALSE, searching = FALSE,
-                     ordering = FALSE, autoWidth = FALSE,
-                     columnDefs = list(list(className = "dt-left", targets = "_all"))))
-  })
+    best
+  }, striped = TRUE, bordered = FALSE, hover = TRUE,
+  spacing = "s", rownames = FALSE, width = "100%")
 
   output$assumptions_table <- renderTable({
     assumptions |>
