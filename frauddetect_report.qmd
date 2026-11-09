@@ -1,6 +1,6 @@
 ---
-title: "FraudDetect: Financial Transaction Fraud Detection & Risk Analytics"
-author: "Ludovic Njiosseu, MS Biostatistics"
+title: "FraudDetect. Corrected Fraud Analytics Report"
+author: "Ludovic Njiosseu, MS Statistics"
 date: today
 format:
   html:
@@ -14,151 +14,159 @@ execute:
   message: false
 ---
 
-## Overview
+## Executive summary
 
-This project builds a production-grade fraud detection and risk analytics pipeline on a simulated dataset of 10,000 financial transactions. It replicates core workflows used in financial services risk teams: feature engineering, class-imbalance correction, ensemble modeling, anomaly scoring, and risk segmentation.
+This report documents the corrected FraudDetect analytical workflow using 10,000 simulated financial transactions. It compares supervised fraud classifiers, evaluates a training-only Isolation Forest with validation-derived alert thresholds, and explores investigation-cost scenarios.
 
-**Key results:**
+**Scope limitation:** The data are simulated. Performance metrics are not evidence of performance on real financial institution transactions. Financial estimates use transaction amount as an exposure proxy and explicit illustrative assumptions. They are not realized losses, actual recoveries, or validated savings.
 
-| Metric | Value |
-|---|---|
-| Ensemble AUC-ROC | See `outputs/model_results.csv` |
-| FP Rate Reduction vs Rule-Based Baseline | See `outputs/key_metrics.csv` |
-| Anomalies Flagged (top 10% isolation score) | See `outputs/risk_tier_summary.csv` |
+## Reproducibility and inputs
 
----
+Run the corrected pipeline from the repository root before rendering this report:
 
-## Module 1 — Data Simulation
-
-```{r}
-source("scripts/01_simulate_data.R")
+```r
+source("corrected_r/scripts/01_modeling.R")
+source("corrected_r/scripts/04_optimize_anomaly_thresholds.R")
+source("corrected_r/scripts/05_cost_sensitive_alert_optimization.R")
 ```
 
-The simulation generates realistic transaction data with known fraud-generating logic:
-- **Fraud drivers**: international transactions, night-time activity, device mismatch, prior fraud history, high velocity
-- **Merchant categories**: 8 categories with varying baseline risk
-- **Fraud rate**: ~5–8%, reflecting real-world class imbalance
-
----
-
-## Module 2 — Exploratory Analysis & Feature Engineering
-
-```{r}
-source("scripts/02_eda_features.R")
-```
-
-### Fraud by Merchant Category
+The report reads generated CSVs from `corrected_r/outputs/`. It does not rerun the original historical scripts.
 
 ```{r}
 library(tidyverse)
-fraud_by_cat <- read_csv("outputs/fraud_by_category.csv", show_col_types = FALSE)
-fraud_by_cat %>%
-  mutate(merchant_category = fct_reorder(merchant_category, fraud_rate)) %>%
-  ggplot(aes(x = merchant_category, y = fraud_rate, fill = fraud_rate)) +
-  geom_col() + coord_flip() +
-  scale_fill_gradient(low = "#27ae60", high = "#e74c3c") +
-  labs(title = "Fraud Rate by Merchant Category",
-       x = NULL, y = "Fraud Rate (%)") +
-  theme_minimal() + theme(legend.position = "none")
+library(knitr)
+out_dir <- "corrected_r/outputs"
+
+model_metrics <- read_csv(file.path(out_dir, "model_comparison.csv"), show_col_types = FALSE)
+policy_metrics <- read_csv(file.path(out_dir, "if_threshold_policy_comparison.csv"), show_col_types = FALSE)
+cost_comparison <- read_csv(file.path(out_dir, "cost_sensitive_policy_comparison.csv"), show_col_types = FALSE)
+cost_sensitivity <- read_csv(file.path(out_dir, "cost_sensitivity_analysis.csv"), show_col_types = FALSE)
+assumptions <- read_csv(file.path(out_dir, "cost_model_assumptions.csv"), show_col_types = FALSE)
+importance <- read_csv(file.path(out_dir, "rf_variable_importance.csv"), show_col_types = FALSE)
 ```
 
-### Feature Correlations with Fraud
+## Data partition and evaluation design
+
+The modeling script creates mutually exclusive stratified partitions:
+
+| Partition | Share | Role |
+|---|---:|---|
+| Training | 60% | Fit supervised models and Isolation Forest |
+| Validation | 20% | XGBoost early stopping and threshold selection |
+| Test | 20% | Final held-out evaluation |
+
+Classification thresholds are selected on validation data. Isolation Forest is fitted using training features only, without fraud labels. Anomaly-score thresholds are selected from validation-score quantiles and then evaluated on the held-out test set.
+
+## Supervised model comparison
 
 ```{r}
-feat_corr <- read_csv("outputs/feature_correlations.csv", show_col_types = FALSE)
-feat_corr %>%
-  mutate(feature = fct_reorder(feature, abs(correlation_with_fraud))) %>%
-  ggplot(aes(x = feature, y = correlation_with_fraud,
-             fill = correlation_with_fraud > 0)) +
-  geom_col() + coord_flip() +
-  scale_fill_manual(values = c("#2980b9", "#e74c3c"),
-                    labels = c("Negative", "Positive")) +
-  labs(title = "Feature Correlations with Fraud Label",
-       x = NULL, y = "Pearson Correlation", fill = "Direction") +
+model_metrics |>
+  select(model, test_roc_auc, test_pr_auc, precision, recall, specificity,
+         false_positives, false_negatives) |>
+  kable(digits = 3, caption = "Held-out test performance")
+```
+
+XGBoost achieved the strongest ROC-AUC and PR-AUC among the three evaluated candidates in this run. At its validation-selected operating threshold, the test evaluation recorded 491 alerts, 79 true positives, and 412 false positives. This is a model comparison on synthetic data, not a production performance claim.
+
+### ROC-AUC and PR-AUC
+
+```{r}
+model_metrics |>
+  select(model, test_roc_auc, test_pr_auc) |>
+  pivot_longer(-model, names_to = "metric", values_to = "value") |>
+  mutate(metric = recode(metric,
+                         test_roc_auc = "ROC-AUC",
+                         test_pr_auc = "PR-AUC")) |>
+  ggplot(aes(x = reorder(model, value), y = value, fill = metric)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(x = NULL, y = "AUC", fill = NULL,
+       title = "Held-out model discrimination") +
   theme_minimal()
 ```
 
----
-
-## Module 3 — Modeling
+### Random Forest permutation importance
 
 ```{r}
-source("scripts/03_modeling.R")
-```
-
-### Model Comparison
-
-```{r}
-model_results <- read_csv("outputs/model_results.csv", show_col_types = FALSE)
-knitr::kable(model_results, caption = "AUC-ROC by Model")
-```
-
-**Approach:** Logistic regression and a bagged decision stump ensemble (RF proxy) are trained on an oversampled balanced training set (minority class oversampled to ~20%). The final prediction is a probability average of both models.
-
-**Threshold selection:** Youden's J statistic (maximizes sensitivity + specificity − 1) is used to identify the optimal classification threshold rather than defaulting to 0.5.
-
-### Feature Importance
-
-```{r}
-feat_imp <- read_csv("outputs/feature_importance.csv", show_col_types = FALSE)
-feat_imp %>%
-  mutate(feature = fct_reorder(feature, abs(coefficient)),
-         direction = ifelse(coefficient > 0, "Increases Risk", "Decreases Risk")) %>%
-  ggplot(aes(x = feature, y = coefficient, fill = direction)) +
-  geom_col() + coord_flip() +
-  scale_fill_manual(values = c("Increases Risk" = "#e74c3c",
-                               "Decreases Risk" = "#2980b9")) +
-  labs(title = "Logistic Regression Coefficients",
-       x = NULL, y = "Log-Odds Coefficient", fill = NULL) +
+importance |>
+  slice_max(permutation_importance, n = 12) |>
+  ggplot(aes(x = reorder(feature, permutation_importance),
+             y = permutation_importance)) +
+  geom_col(fill = "#2874a6") +
+  coord_flip() +
+  labs(x = NULL, y = "Permutation importance",
+       title = "Random Forest feature importance") +
   theme_minimal()
 ```
 
----
+Permutation importance describes how predictive performance changes when a feature is permuted in this fitted model. It does not establish causality.
 
-## Module 4 — Anomaly Scoring & Risk Segmentation
+## Anomaly detection and alert-policy trade-offs
 
-```{r}
-source("scripts/04_anomaly_risk.R")
-```
-
-### Risk Tier Distribution
+The table below compares validation-threshold policies on the held-out test partition.
 
 ```{r}
-risk_tiers <- read_csv("outputs/risk_tier_summary.csv", show_col_types = FALSE)
-knitr::kable(risk_tiers, caption = "Risk Tier Summary")
+policy_metrics |>
+  filter(split == "test") |>
+  select(strategy, target_validation_alert_rate, alerts,
+         true_positives, false_positives, false_negatives,
+         precision, recall, specificity) |>
+  kable(digits = 3, caption = "Anomaly and combined alert policies on test data")
 ```
 
-### Top Risk Segments
+The OR policy can increase fraud recall by adding anomaly alerts to XGBoost alerts, but it also increases investigation volume and false positives. The AND policy is more restrictive and generally trades recall for precision. A validation target rate does not guarantee the same alert rate on the test set.
+
+## Cost-sensitive investigation scenarios
+
+### Assumptions
 
 ```{r}
-risk_segs <- read_csv("outputs/risk_segments.csv", show_col_types = FALSE)
-head(risk_segs, 15) %>%
-  knitr::kable(caption = "Top 15 Risk Segments by Fraud Rate")
+assumptions |> kable(caption = "Illustrative financial assumptions")
 ```
 
-**Anomaly scoring** uses an isolation-forest-inspired approach: transactions are scored by their average path length under random recursive splits. Combined with z-score thresholding on transaction amount, this yields a dual-signal anomaly flag with reduced false-positive rate versus a rule-based amount threshold alone.
+Transaction amount is used as a proxy for fraud exposure. Missed-fraud exposure and the unrecovered share of detected-fraud exposure are scenario calculations. They are not observed realized losses or verified recoveries.
 
----
+### Policy comparison
 
-## Reproducibility
+```{r}
+cost_comparison |>
+  arrange(estimated_total_cost) |>
+  select(strategy, alerts, true_positives, false_positives,
+         false_negatives, total_alert_review_cost,
+         estimated_missed_fraud_loss, estimated_total_cost) |>
+  kable(digits = 2, caption = "Estimated costs under default assumptions")
+```
 
-All code is modular and documented. Run scripts in order from the project root:
+### Sensitivity analysis
+
+```{r}
+cost_sensitivity |>
+  group_by(review_cost_per_alert, recovery_share_when_detected) |>
+  slice_min(estimated_total_cost, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  select(review_cost_per_alert, recovery_share_when_detected,
+         strategy, alerts, estimated_total_cost) |>
+  arrange(review_cost_per_alert, recovery_share_when_detected) |>
+  kable(digits = 2, caption = "Lowest estimated-cost policy by scenario")
+```
+
+Operational capacity is a separate constraint. The Shiny dashboard applies an editable alert-capacity filter before showing feasible policies. Cost rankings are conditional on the assumed review cost, loss severity, recovery share, and available investigation capacity.
+
+## Limitations
+
+- The dataset is simulated and may not reflect real fraud prevalence, feature distributions, adversarial behavior, or operational workflows.
+- A single held-out split provides uncertain estimates. Temporal validation and independent external data would be needed for stronger evidence.
+- Synthetic feature relationships do not establish causal fraud drivers.
+- Transaction amount is only an exposure proxy. Institution-specific loss, recovery, and investigation-cost data are needed for credible financial estimates.
+- The dashboard is an analytical demonstration, not a real-time scoring service or case-management system.
+- No production monitoring, model drift controls, or deployment architecture is implemented.
+
+## Interactive dashboard
+
+After generating the corrected outputs, launch the dashboard from the repository root:
 
 ```r
-source("scripts/01_simulate_data.R")
-source("scripts/02_eda_features.R")
-source("scripts/03_modeling.R")
-source("scripts/04_anomaly_risk.R")
 shiny::runApp("shiny/")
 ```
 
-Required packages: `tidyverse`, `pROC`, `shiny`, `bslib`, `bsicons`, `DT`
-
----
-
-## Limitations & Extensions
-
-- The dataset is simulated; real-world deployment would require calibration on live transaction data and ongoing model monitoring for distribution shift.
-- The bagged stump ensemble is a pedagogical RF proxy — production deployment would use `ranger` or `xgboost`.
-- Temporal features (transaction sequence, recency) are not modeled here but are critical in production fraud systems.
-- No survival/time-to-fraud analysis is included; this would be a natural extension for account-level risk modeling.
+The dashboard provides an executive overview, fraud patterns, supervised model comparison, anomaly-policy comparison, cost-sensitive financial analysis, and a held-out transaction explorer.
