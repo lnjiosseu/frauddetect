@@ -101,8 +101,8 @@ ui <- page_navbar(
         grid-template-columns: minmax(0, 5fr) minmax(0, 3fr) minmax(0, 4fr);
         gap: 1rem; align-items: stretch; margin-bottom: 1rem;
         width: 100%; }
-      .financial-kpi-card { min-height: 205px !important;
-        height: 205px !important; box-sizing: border-box; padding: 1rem;
+      .financial-kpi-card { min-height: 155px !important;
+        height: 155px !important; box-sizing: border-box; padding: 1rem;
         border: 1px solid #d9dee3; border-radius: .5rem; background: #fff;
         display: flex; flex-direction: column; justify-content: flex-start;
         gap: .65rem; overflow: visible; }
@@ -131,6 +131,9 @@ ui <- page_navbar(
       #sensitivity_table th:nth-child(5) { width: 28%; }
       #assumptions_table th:first-child, #assumptions_table td:first-child { width: 62%; }
       .financial-note { line-height: 1.45; margin-top: .75rem; }
+      #cost_plot { display: block; width: 100%; min-height: 520px; }
+      #cost_plot .shiny-plot-output { min-height: 520px; }
+      .card:has(#cost_plot) { overflow: visible; }
     ")),
     tags$p("Corrected R pipeline | Held-out test evaluation | Simulated transaction data",
            class = "text-muted small mb-2")
@@ -229,7 +232,7 @@ ui <- page_navbar(
     ),
     card(
       card_header("Lowest estimated-cost policies within capacity"),
-      plotOutput("cost_plot", height = 440),
+      plotOutput("cost_plot", height = 520),
       DTOutput("cost_table")
     ),
     card(
