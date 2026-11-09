@@ -86,6 +86,13 @@ The cost ranking is conditional on these assumptions. It should not be treated a
 
 ## Interactive dashboard
 
+The dashboard source is available in [`shiny/app.R`](shiny/app.R). The analytical report source is available in [`frauddetect_report.qmd`](frauddetect_report.qmd). To generate the standalone HTML report locally, run:
+
+```r
+quarto::quarto_render("frauddetect_report.qmd")
+```
+
+
 The Shiny dashboard contains six sections:
 
 1. **Executive Overview:** held-out test scope, fraud prevalence, model summary, and high-level patterns.
