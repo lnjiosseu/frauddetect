@@ -245,7 +245,7 @@ ui <- page_navbar(
           card_header("Sensitivity analysis"),
           p(class = "text-muted small",
             "Lowest estimated-cost policy for each review-cost and recovery scenario, after applying the investigation-capacity limit."),
-          tableOutput("sensitivity_table")
+          DTOutput("sensitivity_table")
         ),
         card(
           card_header("Modeling assumptions and limitations"),
@@ -333,7 +333,7 @@ server <- function(input, output, session) {
 
   output$model_auc <- renderPlot({
     model_metrics |>
-      select(model, test_roc_auc, test_pr_auc) |>
+      mutate(model = recode(model, Random_Forest = "Random Forest",\n                            Equal_Weight_Blend = "Equal-weight Blend")) |>\n      select(model, test_roc_auc, test_pr_auc) |>
       pivot_longer(-model, names_to = "metric", values_to = "value") |>
       mutate(metric = recode(metric, test_roc_auc = "ROC-AUC", test_pr_auc = "PR-AUC")) |>
       ggplot(aes(x = reorder(model, value), y = value, fill = metric)) +
@@ -342,7 +342,7 @@ server <- function(input, output, session) {
       labs(x = NULL, y = "Score", fill = NULL) + theme_minimal()
   })
   output$model_table <- renderDT({
-    display_metrics <- model_metrics |>
+    display_metrics <- model_metrics |>\n      mutate(model = recode(model, Random_Forest = "Random Forest",\n                            Equal_Weight_Blend = "Equal-weight Blend")) |>
       select(model, test_roc_auc, test_pr_auc, precision, recall, specificity) |>
       rename(
         `Model` = model,
@@ -455,10 +455,11 @@ server <- function(input, output, session) {
                       "estimated_total_cost"), currency = "$")
   })
 
-  output$sensitivity_table <- renderTable({
+  output$sensitivity_table <- renderDT({
     # Apply the capacity constraint before selecting the lowest-cost policy.
     if (!"alerts" %in% names(sensitivity)) {
-      return(data.frame(Note = "Sensitivity output lacks alert counts."))
+      return(datatable(data.frame(Note = "Sensitivity output lacks alert counts."),
+                       rownames = FALSE, options = list(dom = "t")))
     }
     best <- sensitivity |>
       filter(alerts <= capacity()) |>
@@ -474,11 +475,13 @@ server <- function(input, output, session) {
         `Estimated total cost` = dollar(estimated_total_cost, accuracy = 1)
       )
     if (nrow(best) == 0) {
-      return(data.frame(Note = "No policy meets the current investigation capacity. Increase the capacity to view scenario results."))
+      best <- data.frame(Note = "No policy meets the current investigation capacity. Increase the capacity to view scenario results.")
     }
-    best
-  }, striped = TRUE, bordered = FALSE, hover = TRUE,
-  spacing = "s", rownames = FALSE, width = "100%")
+    datatable(best, rownames = FALSE,
+      options = list(dom = "t", paging = FALSE, searching = FALSE,
+                     ordering = FALSE, autoWidth = FALSE,
+                     columnDefs = list(list(className = "dt-left", targets = "_all"))))
+  })
 
   output$assumptions_table <- renderTable({
     assumptions |>
@@ -501,18 +504,27 @@ server <- function(input, output, session) {
     if (!is.null(input$filter_alert) && input$filter_alert != "All")
       dat <- dat |> filter(xgboost_predicted == if_else(input$filter_alert == "Alert", 1L, 0L))
     dat |>
-      transmute(transaction_id, merchant_category, amount, geography, time_of_day,
-                xgboost_probability, xgboost_predicted, anomaly_score,
-                is_fraud) |>
-      arrange(desc(xgboost_probability))
+      transmute(
+        `Transaction ID` = transaction_id,
+        `Merchant category` = merchant_category,
+        `Amount` = amount,
+        `Geography` = geography,
+        `Time of day` = time_of_day,
+        `XGBoost probability` = xgboost_probability,
+        `XGBoost alert` = if_else(xgboost_predicted == 1, "Alert", "No alert"),
+        `Anomaly score` = anomaly_score,
+        `Actual outcome` = if_else(is_fraud == 1, "Fraud", "Legitimate")
+      ) |>
+      arrange(desc(`XGBoost probability`))
   })
   output$transaction_table <- renderDT({
     datatable(filtered_transactions(), rownames = FALSE,
               filter = "top", options = list(pageLength = 15, scrollX = TRUE)) |>
-      formatPercentage("xgboost_probability", digits = 1) |>
-      formatStyle("is_fraud",
+      formatPercentage("XGBoost probability", digits = 1) |>
+      formatRound("Anomaly score", digits = 3) |>
+      formatStyle("Actual outcome",
         target = "row",
-        backgroundColor = styleEqual(c(0, 1), c("white", "#fde8e8")))
+        backgroundColor = styleEqual(c("Legitimate", "Fraud"), c("white", "#fde8e8")))
   })
 }
 
