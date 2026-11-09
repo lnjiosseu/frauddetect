@@ -1,243 +1,409 @@
-# =============================================================================
-# FraudDetect: shiny/app.R — Interactive Risk Analytics Dashboard
-# =============================================================================
-
-# Clear environment
-#rm(list = ls())
+# FraudDetect: corrected risk analytics dashboard
+# Run the corrected pipeline from the repository root before launching:
+#   source("corrected_r/scripts/01_modeling.R")
+#   source("corrected_r/scripts/04_optimize_anomaly_thresholds.R")
+#   source("corrected_r/scripts/05_cost_sensitive_alert_optimization.R")
+# Then launch with shiny::runApp("shiny/")
 
 library(shiny)
 library(bslib)
 library(tidyverse)
+library(DT)
+library(scales)
 
-# Load data (run scripts first to generate outputs/)
-load_data <- function() {
-  list(
-    transactions  = read_csv("../data/transactions_scored.csv",  show_col_types = FALSE),
-    model_results = read_csv("../outputs/model_results.csv",     show_col_types = FALSE),
-    key_metrics   = read_csv("../outputs/key_metrics.csv",       show_col_types = FALSE),
-    fraud_by_cat  = read_csv("../outputs/fraud_by_category.csv", show_col_types = FALSE),
-    fraud_by_time = read_csv("../outputs/fraud_by_time.csv",     show_col_types = FALSE),
-    fraud_by_geo  = read_csv("../outputs/fraud_by_geography.csv",show_col_types = FALSE),
-    risk_tiers    = read_csv("../outputs/risk_tier_summary.csv", show_col_types = FALSE),
-    risk_segments = read_csv("../outputs/risk_segments.csv",     show_col_types = FALSE),
-    feat_imp      = read_csv("../outputs/feature_importance.csv",show_col_types = FALSE),
-    test_preds    = read_csv("../outputs/test_predictions.csv",  show_col_types = FALSE)
-  )
+# Resolve paths whether launched from the repository root or shiny/.
+wd <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+root <- if (file.exists(file.path(wd, "data", "transactions.csv"))) {
+  wd
+} else {
+  normalizePath(file.path(wd, ".."), winslash = "/", mustWork = TRUE)
+}
+out_dir <- file.path(root, "corrected_r", "outputs")
+
+read_required <- function(path) {
+  if (!file.exists(path)) {
+    stop(
+      "Required input is missing: ", path,
+      "\nRun corrected_r/scripts/01_modeling.R, ",
+      "04_optimize_anomaly_thresholds.R, and ",
+      "05_cost_sensitive_alert_optimization.R from the repository root."
+    )
+  }
+  readr::read_csv(path, show_col_types = FALSE)
 }
 
-d <- load_data()
+raw <- read_required(file.path(root, "data", "transactions.csv"))
+model_metrics <- read_required(file.path(out_dir, "model_comparison.csv"))
+predictions <- read_required(file.path(out_dir, "test_predictions.csv"))
+if_policy <- read_required(file.path(out_dir, "if_threshold_policy_comparison.csv"))
+if_scores <- read_required(file.path(out_dir, "if_test_scores.csv"))
+costs <- read_required(file.path(out_dir, "cost_sensitive_policy_comparison.csv"))
+sensitivity <- read_required(file.path(out_dir, "cost_sensitivity_analysis.csv"))
+assumptions <- read_required(file.path(out_dir, "cost_model_assumptions.csv"))
 
-# Colour palette
-PAL <- list(high = "#e74c3c", med = "#f39c12", low = "#27ae60",
-            blue = "#2980b9", dark = "#2c3e50", light = "#ecf0f1")
+# Validate the corrected pipeline contract before rendering any panels.
+required_model <- c("model", "test_roc_auc", "test_pr_auc", "precision",
+                    "recall", "specificity", "false_positives", "false_negatives")
+required_pred <- c("transaction_id", "actual", "xgboost_probability",
+                   "xgboost_predicted")
+required_policy <- c("split", "strategy", "alerts", "true_positives",
+                     "false_positives", "false_negatives", "precision", "recall")
+required_cost <- c("strategy", "alerts", "estimated_total_cost",
+                   "total_alert_review_cost", "estimated_missed_fraud_loss")
+for (item in list(
+  list(data = model_metrics, cols = required_model, name = "model_comparison.csv"),
+  list(data = predictions, cols = required_pred, name = "test_predictions.csv"),
+  list(data = if_policy, cols = required_policy, name = "if_threshold_policy_comparison.csv"),
+  list(data = costs, cols = required_cost, name = "cost_sensitive_policy_comparison.csv")
+)) {
+  missing <- setdiff(item$cols, names(item$data))
+  if (length(missing)) stop(item$name, " is missing columns: ", paste(missing, collapse = ", "))
+}
+
+# Normalize identifiers and join only held-out test records.
+raw <- raw |> mutate(transaction_id = as.character(transaction_id))
+predictions <- predictions |> mutate(transaction_id = as.character(transaction_id))
+if_scores <- if_scores |> mutate(transaction_id = as.character(transaction_id))
+transactions <- raw |>
+  inner_join(predictions, by = c("transaction_id", "is_fraud" = "actual")) |>
+  left_join(if_scores |> select(transaction_id, anomaly_score), by = "transaction_id")
+
+if (nrow(transactions) != nrow(predictions)) {
+  stop("Transaction, prediction, and anomaly-score files do not align. Rerun scripts 01 and 04.")
+}
+if (!"amount" %in% names(transactions)) stop("Source transactions must include amount.")
+if (!"merchant_category" %in% names(transactions)) stop("Source transactions must include merchant_category.")
+if (!"geography" %in% names(transactions)) stop("Source transactions must include geography.")
+if (!"time_of_day" %in% names(transactions)) stop("Source transactions must include time_of_day.")
+
+PAL <- list(red = "#c0392b", amber = "#d68910", green = "#238b57",
+            blue = "#2874a6", navy = "#243447", grey = "#657786")
+
+fmt_pct <- function(x, digits = 1) ifelse(is.na(x), "N/A", percent(x, accuracy = 10^(-digits)))
+fmt_num <- function(x) comma(x, accuracy = 1)
+fmt_money <- function(x) dollar(x, accuracy = 1)
+
+# Cost policies and threshold policies share the same strategy names.
+policy_test <- if_policy |> filter(split == "test")
+if (!"target_validation_alert_rate" %in% names(policy_test)) {
+  policy_test$target_validation_alert_rate <- NA_real_
+}
+costs <- costs |> mutate(strategy = as.character(strategy))
+policy_test <- policy_test |> mutate(strategy = as.character(strategy))
 
 ui <- page_navbar(
-  title = "FraudDetect — Risk Analytics Dashboard",
-  theme = bs_theme(bootswatch = "flatly", primary = PAL$dark),
+  title = "FraudDetect | Risk Analytics",
+  theme = bs_theme(bootswatch = "flatly", primary = PAL$navy),
+  header = tags$div(
+    class = "container-fluid",
+    tags$p("Corrected R pipeline | Held-out test evaluation | Simulated transaction data",
+           class = "text-muted small mb-2")
+  ),
 
-  # ── Tab 1: Overview ────────────────────────────────────────────────────────
-  nav_panel("Overview",
+  nav_panel("Executive Overview",
     layout_columns(
       col_widths = c(3, 3, 3, 3),
-      value_box("Total Transactions", scales::comma(nrow(d$transactions)),
+      value_box("Held-out transactions", fmt_num(nrow(transactions)),
                 showcase = bsicons::bs_icon("credit-card"), theme = "primary"),
-      value_box("Fraud Rate",
-                paste0(round(mean(d$transactions$is_fraud) * 100, 2), "%"),
-                showcase = bsicons::bs_icon("exclamation-triangle-fill"), theme = "danger"),
-      value_box("High-Risk Transactions",
-                scales::comma(sum(d$transactions$risk_tier == "High")),
-                showcase = bsicons::bs_icon("shield-exclamation"), theme = "warning"),
-      value_box("Anomalies Flagged",
-                scales::comma(sum(d$transactions$anomaly_combined)),
-                showcase = bsicons::bs_icon("bug-fill"), theme = "secondary")
+      value_box("Fraud prevalence", fmt_pct(mean(transactions$is_fraud)),
+                showcase = bsicons::bs_icon("exclamation-triangle"), theme = "danger"),
+      value_box("XGBoost test PR-AUC",
+                fmt_num(model_metrics$test_pr_auc[model_metrics$model == "XGBoost"][1]),
+                showcase = bsicons::bs_icon("graph-up"), theme = "success"),
+      value_box("Investigation capacity", textOutput("overview_capacity", inline = TRUE),
+                showcase = bsicons::bs_icon("people"), theme = "warning")
     ),
     layout_columns(
       col_widths = c(6, 6),
-      card(
-        card_header("Fraud Rate by Merchant Category"),
-        plotOutput("plot_fraud_cat", height = "320px")
-      ),
-      card(
-        card_header("Risk Score Distribution by Fraud Label"),
-        plotOutput("plot_risk_dist", height = "320px")
-      )
+      card(card_header("Fraud prevalence by merchant category"),
+           plotOutput("overview_category", height = 320)),
+      card(card_header("XGBoost score distribution by actual outcome"),
+           plotOutput("overview_scores", height = 320))
+    ),
+    card(
+      card_header("How to interpret this dashboard"),
+      p("Model metrics are calculated on a held-out test set. Anomaly thresholds are selected using validation data. Financial impact is illustrative: transaction amount is an exposure proxy, not observed realized loss."),
+      p("The investigation-capacity control is applied to the policy comparison and financial-impact views. It does not retrain models or alter test predictions.")
     )
   ),
 
-  # ── Tab 2: Model Performance ────────────────────────────────────────────────
-  nav_panel("Model Performance",
+  nav_panel("Fraud Patterns",
+    layout_columns(
+      col_widths = c(6, 6),
+      card(card_header("Fraud rate by merchant category"),
+           plotOutput("pattern_category", height = 330)),
+      card(card_header("Fraud rate by time of day"),
+           plotOutput("pattern_time", height = 330))
+    ),
+    layout_columns(
+      col_widths = c(6, 6),
+      card(card_header("Fraud rate by geography"),
+           plotOutput("pattern_geo", height = 300)),
+      card(card_header("Transaction amount distribution"),
+           plotOutput("pattern_amount", height = 300))
+    )
+  ),
+
+  nav_panel("Predictive Modeling",
     layout_columns(
       col_widths = c(5, 7),
-      card(
-        card_header("Model Comparison — AUC-ROC"),
-        plotOutput("plot_model_compare", height = "280px"),
-        hr(),
-        card_header("Key Metrics"),
-        tableOutput("tbl_metrics")
-      ),
-      card(
-        card_header("Feature Importance (Logistic Regression Coefficients)"),
-        plotOutput("plot_feat_imp", height = "400px")
-      )
+      card(card_header("Held-out model comparison"),
+           plotOutput("model_auc", height = 300),
+           p(class = "text-muted small",
+             "ROC-AUC and PR-AUC are shown separately. PR-AUC is particularly informative when fraud is uncommon.")),
+      card(card_header("Model performance metrics"),
+           DTOutput("model_table"))
+    ),
+    card(card_header("Random Forest permutation importance"),
+         plotOutput("feature_importance", height = 380))
+  ),
+
+  nav_panel("Anomaly Policies",
+    card(
+      card_header("Compare anomaly and combined alert strategies"),
+      p("Isolation Forest is fitted on training features only. Alert cutoffs are derived from validation-score quantiles and evaluated on the held-out test set."),
+      plotOutput("policy_tradeoff", height = 360),
+      DTOutput("policy_table")
     )
   ),
 
-  # ── Tab 3: Risk Segmentation ─────────────────────────────────────────────
-  nav_panel("Risk Segmentation",
+  nav_panel("Financial Impact",
     layout_columns(
-      col_widths = c(6, 6),
-      card(
-        card_header("Fraud Rate by Time of Day"),
-        plotOutput("plot_time", height = "280px")
-      ),
-      card(
-        card_header("Fraud Rate by Geography"),
-        plotOutput("plot_geo", height = "280px")
-      )
+      col_widths = c(4, 4, 4),
+      card(card_header("Investigation capacity"),
+           numericInput("capacity", "Maximum alerts investigators can review",
+                        value = 500, min = 1, max = nrow(transactions), step = 25),
+           textOutput("capacity_status")),
+      card(card_header("Review cost per alert"),
+           textOutput("review_assumption"),
+           p(class = "text-muted small", "Read from the assumptions used to generate the cost analysis.")),
+      card(card_header("Recovery assumption"),
+           textOutput("recovery_assumption"),
+           p(class = "text-muted small", "Illustrative share of detected fraud exposure prevented or recovered."))
     ),
-    card(
-      card_header("Risk Tier Breakdown"),
-      tableOutput("tbl_risk_tiers")
-    ),
-    card(
-      card_header("Top Risk Segments (Merchant × Geography × Time)"),
-      tableOutput("tbl_segments")
-    )
+    card(card_header("Lowest estimated-cost policies within capacity"),
+         plotOutput("cost_plot", height = 330),
+         DTOutput("cost_table")),
+    card(card_header("Sensitivity analysis"),
+         p("The preferred policy can change when investigation cost and assumed recovery rates change. The capacity filter is applied before selecting the lowest-cost policy in each scenario."),
+         DTOutput("sensitivity_table")),
+    card(card_header("Modeling assumptions and limitations"),
+         DTOutput("assumptions_table"),
+         p(class = "text-muted small",
+           "These are scenario estimates, not measured bank losses, recovery rates, or operational costs. Validate assumptions with institution-specific data before operational use."))
   ),
 
-  # ── Tab 4: Transaction Explorer ─────────────────────────────────────────
   nav_panel("Transaction Explorer",
     layout_columns(
       col_widths = c(3, 3, 3, 3),
-      selectInput("sel_cat", "Merchant Category",
-                  choices = c("All", unique(d$transactions$merchant_category))),
-      selectInput("sel_geo", "Geography",
-                  choices = c("All", unique(d$transactions$geography))),
-      selectInput("sel_tier", "Risk Tier",
-                  choices = c("All", "High", "Medium", "Low")),
-      selectInput("sel_fraud", "Fraud Label",
-                  choices = c("All", "Fraud" = "1", "Legitimate" = "0"))
+      selectInput("filter_category", "Merchant category",
+                  choices = c("All", sort(unique(transactions$merchant_category)))),
+      selectInput("filter_geo", "Geography",
+                  choices = c("All", sort(unique(transactions$geography)))),
+      selectInput("filter_label", "Actual outcome",
+                  choices = c("All", "Fraud", "Legitimate")),
+      selectInput("filter_alert", "XGBoost alert",
+                  choices = c("All", "Alert", "No alert"))
     ),
-    card(
-      card_header("Filtered Transactions"),
-      DT::dataTableOutput("tbl_transactions")
-    )
+    card(card_header("Held-out test transactions"),
+         DTOutput("transaction_table"))
   )
 )
 
 server <- function(input, output, session) {
+  output$overview_capacity <- renderText(fmt_num(input$capacity %||% 500))
 
-  # Plot: fraud rate by category
-  output$plot_fraud_cat <- renderPlot({
-    d$fraud_by_cat %>%
-      mutate(merchant_category = fct_reorder(merchant_category, fraud_rate)) %>%
-      ggplot(aes(x = merchant_category, y = fraud_rate, fill = fraud_rate)) +
-      geom_col() +
-      coord_flip() +
-      scale_fill_gradient(low = PAL$low, high = PAL$high) +
-      labs(x = NULL, y = "Fraud Rate (%)", fill = NULL) +
-      theme_minimal(base_size = 13) +
-      theme(legend.position = "none")
+  fraud_rates <- function(data, group) {
+    data |>
+      group_by(.data[[group]]) |>
+      summarise(n = n(), fraud_rate = mean(is_fraud) * 100, .groups = "drop") |>
+      arrange(desc(fraud_rate))
+  }
+
+  output$overview_category <- renderPlot({
+    fraud_rates(transactions, "merchant_category") |>
+      ggplot(aes(x = reorder(merchant_category, fraud_rate), y = fraud_rate)) +
+      geom_col(fill = PAL$red) + coord_flip() +
+      labs(x = NULL, y = "Fraud rate (%)") + theme_minimal(base_size = 12)
   })
 
-  # Plot: risk score distribution
-  output$plot_risk_dist <- renderPlot({
-    d$transactions %>%
-      mutate(Fraud = factor(is_fraud, labels = c("Legitimate", "Fraud"))) %>%
-      ggplot(aes(x = risk_score, fill = Fraud)) +
-      geom_histogram(bins = 40, alpha = 0.7, position = "identity") +
-      scale_fill_manual(values = c(PAL$blue, PAL$high)) +
-      labs(x = "Risk Score", y = "Count", fill = NULL) +
-      theme_minimal(base_size = 13)
+  output$overview_scores <- renderPlot({
+    transactions |>
+      mutate(outcome = if_else(is_fraud == 1, "Fraud", "Legitimate")) |>
+      ggplot(aes(x = xgboost_probability, fill = outcome)) +
+      geom_histogram(bins = 35, position = "identity", alpha = 0.6) +
+      scale_fill_manual(values = c("Legitimate" = PAL$blue, "Fraud" = PAL$red)) +
+      labs(x = "XGBoost predicted probability", y = "Transactions", fill = NULL) +
+      theme_minimal(base_size = 12)
   })
 
-  # Plot: model comparison
-  output$plot_model_compare <- renderPlot({
-    d$model_results %>%
-      mutate(model = fct_reorder(model, auc_roc)) %>%
-      ggplot(aes(x = model, y = auc_roc, fill = model)) +
-      geom_col(width = 0.5) +
-      geom_text(aes(label = sprintf("%.4f", auc_roc)), hjust = -0.1, size = 4) +
-      coord_flip(ylim = c(0.7, 1.0)) +
-      scale_fill_manual(values = c(PAL$blue, PAL$med, PAL$high)) +
-      labs(x = NULL, y = "AUC-ROC") +
-      theme_minimal(base_size = 13) +
-      theme(legend.position = "none")
+  output$pattern_category <- renderPlot({
+    fraud_rates(transactions, "merchant_category") |>
+      ggplot(aes(x = reorder(merchant_category, fraud_rate), y = fraud_rate)) +
+      geom_col(fill = PAL$red) + coord_flip() +
+      labs(x = NULL, y = "Fraud rate (%)") + theme_minimal()
+  })
+  output$pattern_time <- renderPlot({
+    fraud_rates(transactions, "time_of_day") |>
+      ggplot(aes(x = reorder(time_of_day, fraud_rate), y = fraud_rate)) +
+      geom_col(fill = PAL$amber) +
+      labs(x = NULL, y = "Fraud rate (%)") + theme_minimal()
+  })
+  output$pattern_geo <- renderPlot({
+    fraud_rates(transactions, "geography") |>
+      ggplot(aes(x = reorder(geography, fraud_rate), y = fraud_rate)) +
+      geom_col(fill = PAL$blue) + coord_flip() +
+      labs(x = NULL, y = "Fraud rate (%)") + theme_minimal()
+  })
+  output$pattern_amount <- renderPlot({
+    ggplot(transactions, aes(x = amount, fill = factor(is_fraud,
+            levels = c(0, 1), labels = c("Legitimate", "Fraud")))) +
+      geom_histogram(bins = 40, position = "identity", alpha = 0.6) +
+      scale_x_log10(labels = label_dollar()) +
+      scale_fill_manual(values = c("Legitimate" = PAL$blue, "Fraud" = PAL$red)) +
+      labs(x = "Transaction amount (log scale)", y = "Transactions", fill = NULL) +
+      theme_minimal()
   })
 
-  # Table: key metrics
-  output$tbl_metrics <- renderTable({
-    d$key_metrics
-  }, striped = TRUE, hover = TRUE)
-
-  # Plot: feature importance
-  output$plot_feat_imp <- renderPlot({
-    d$feat_imp %>%
-      mutate(feature = fct_reorder(feature, abs(coefficient)),
-             direction = ifelse(coefficient > 0, "Increases Risk", "Decreases Risk")) %>%
-      ggplot(aes(x = feature, y = coefficient, fill = direction)) +
-      geom_col() +
-      coord_flip() +
-      scale_fill_manual(values = c("Increases Risk" = PAL$high,
-                                   "Decreases Risk" = PAL$blue)) +
-      labs(x = NULL, y = "Log-Odds Coefficient", fill = NULL) +
-      theme_minimal(base_size = 13)
+  output$model_auc <- renderPlot({
+    model_metrics |>
+      select(model, test_roc_auc, test_pr_auc) |>
+      pivot_longer(-model, names_to = "metric", values_to = "value") |>
+      mutate(metric = recode(metric, test_roc_auc = "ROC-AUC", test_pr_auc = "PR-AUC")) |>
+      ggplot(aes(x = reorder(model, value), y = value, fill = metric)) +
+      geom_col(position = "dodge") + coord_flip() +
+      scale_fill_manual(values = c("ROC-AUC" = PAL$blue, "PR-AUC" = PAL$amber)) +
+      labs(x = NULL, y = "Score", fill = NULL) + theme_minimal()
+  })
+  output$model_table <- renderDT({
+    datatable(model_metrics, rownames = FALSE, options = list(pageLength = 5, dom = "tip")) |>
+      formatPercentage(c("precision", "recall", "specificity", "false_positive_rate",
+                         "test_fraud_prevalence"), digits = 1)
   })
 
-  # Plot: time of day
-  output$plot_time <- renderPlot({
-    d$fraud_by_time %>%
-      mutate(time_of_day = fct_reorder(time_of_day, fraud_rate)) %>%
-      ggplot(aes(x = time_of_day, y = fraud_rate, fill = fraud_rate)) +
-      geom_col() +
-      scale_fill_gradient(low = PAL$low, high = PAL$high) +
-      labs(x = NULL, y = "Fraud Rate (%)") +
-      theme_minimal(base_size = 13) +
-      theme(legend.position = "none")
+  importance_path <- file.path(out_dir, "rf_variable_importance.csv")
+  importance <- if (file.exists(importance_path)) {
+    readr::read_csv(importance_path, show_col_types = FALSE)
+  } else {
+    tibble(feature = character(), permutation_importance = double())
+  }
+  output$feature_importance <- renderPlot({
+    validate(need(nrow(importance) > 0, "Run 01_modeling.R to generate RF variable importance."))
+    importance |>
+      slice_max(permutation_importance, n = 15) |>
+      ggplot(aes(x = reorder(feature, permutation_importance),
+                 y = permutation_importance)) +
+      geom_col(fill = PAL$blue) + coord_flip() +
+      labs(x = NULL, y = "Permutation importance") + theme_minimal()
   })
 
-  # Plot: geography
-  output$plot_geo <- renderPlot({
-    d$fraud_by_geo %>%
-      ggplot(aes(x = geography, y = fraud_rate, fill = geography)) +
-      geom_col(width = 0.4) +
-      scale_fill_manual(values = c(PAL$blue, PAL$high)) +
-      labs(x = NULL, y = "Fraud Rate (%)") +
-      theme_minimal(base_size = 13) +
-      theme(legend.position = "none")
+  output$policy_tradeoff <- renderPlot({
+    policy_test |>
+      mutate(strategy = str_replace_all(strategy, "_", " ")) |>
+      ggplot(aes(x = recall, y = precision, size = alerts, label = strategy)) +
+      geom_point(alpha = 0.75, colour = PAL$blue) +
+      scale_x_continuous(labels = label_percent()) +
+      scale_y_continuous(labels = label_percent()) +
+      labs(x = "Recall", y = "Precision", size = "Alerts") +
+      theme_minimal()
+  })
+  output$policy_table <- renderDT({
+    datatable(policy_test |>
+      select(strategy, alerts, true_positives, false_positives,
+             false_negatives, precision, recall, specificity),
+      rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE)) |>
+      formatPercentage(c("precision", "recall", "specificity"), digits = 1)
   })
 
-  # Table: risk tiers
-  output$tbl_risk_tiers <- renderTable({
-    d$risk_tiers
-  }, striped = TRUE, hover = TRUE)
-
-  # Table: top segments
-  output$tbl_segments <- renderTable({
-    head(d$risk_segments, 20)
-  }, striped = TRUE, hover = TRUE)
-
-  # Reactive filter for transaction explorer
-  filtered_txns <- reactive({
-    df <- d$transactions
-    if (input$sel_cat   != "All") df <- df %>% filter(merchant_category == input$sel_cat)
-    if (input$sel_geo   != "All") df <- df %>% filter(geography == input$sel_geo)
-    if (input$sel_tier  != "All") df <- df %>% filter(risk_tier == input$sel_tier)
-    if (input$sel_fraud != "All") df <- df %>% filter(is_fraud == as.integer(input$sel_fraud))
-    df %>%
-      select(transaction_id, merchant_category, amount, geography,
-             time_of_day, risk_score, risk_tier, is_fraud,
-             anomaly_combined, isolation_score) %>%
-      arrange(desc(risk_score))
+  capacity <- reactive({
+    cap <- input$capacity
+    if (is.null(cap) || !is.finite(cap) || cap < 1) 500 else cap
+  })
+  feasible_costs <- reactive({
+    costs |>
+      filter(alerts <= capacity()) |>
+      arrange(estimated_total_cost)
+  })
+  output$capacity_status <- renderText({
+    paste0("Policies are eligible only when alerts are at or below ",
+           fmt_num(capacity()), ".")
+  })
+  assumption_value <- function(key) {
+    value <- assumptions$value[assumptions$assumption == key]
+    if (length(value)) value[[1]] else "Not specified"
+  }
+  output$review_assumption <- renderText({
+    paste0(fmt_money(as.numeric(assumption_value("cost_per_alert_review"))),
+           " per alert")
+  })
+  output$recovery_assumption <- renderText({
+    paste0(fmt_pct(as.numeric(assumption_value("recovery_share_when_detected"))),
+           " assumed recovery")
+  })
+  output$cost_plot <- renderPlot({
+    dat <- feasible_costs() |> slice_head(n = 8)
+    validate(need(nrow(dat) > 0, "No policy meets this alert capacity. Increase capacity."))
+    ggplot(dat, aes(x = reorder(str_replace_all(strategy, "_", " "),
+                                estimated_total_cost),
+                    y = estimated_total_cost)) +
+      geom_col(fill = PAL$green) + coord_flip() +
+      scale_y_continuous(labels = label_dollar()) +
+      labs(x = NULL, y = "Estimated total cost") + theme_minimal()
+  })
+  output$cost_table <- renderDT({
+    dat <- feasible_costs()
+    validate(need(nrow(dat) > 0, "No policy meets this alert capacity."))
+    datatable(dat |>
+      select(strategy, alerts, true_positives, false_positives,
+             false_negatives, total_alert_review_cost,
+             estimated_missed_fraud_loss, estimated_total_cost),
+      rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE)) |>
+      formatCurrency(c("total_alert_review_cost", "estimated_missed_fraud_loss",
+                      "estimated_total_cost"), currency = "$")
   })
 
-  output$tbl_transactions <- DT::renderDataTable({
-    DT::datatable(filtered_txns(), options = list(pageLength = 15), rownames = FALSE) %>%
-      DT::formatStyle("is_fraud",
-                      backgroundColor = DT::styleEqual(c(0, 1), c("white", "#fde8e8"))) %>%
-      DT::formatStyle("risk_tier",
-                      color = DT::styleEqual(c("Low", "Medium", "High"),
-                                             c(PAL$low, PAL$med, PAL$high)))
+  output$sensitivity_table <- renderDT({
+    # Capacity is enforced for every cost/recovery scenario before ranking.
+    if (!"alerts" %in% names(sensitivity)) {
+      return(datatable(data.frame(Note = "Sensitivity output lacks alert counts.")))
+    }
+    best <- sensitivity |>
+      filter(alerts <= capacity()) |>
+      group_by(review_cost_per_alert, recovery_share_when_detected) |>
+      slice_min(estimated_total_cost, n = 1, with_ties = FALSE) |>
+      ungroup() |>
+      arrange(review_cost_per_alert, recovery_share_when_detected)
+    datatable(best, rownames = FALSE, options = list(pageLength = 12, scrollX = TRUE)) |>
+      formatPercentage("recovery_share_when_detected", digits = 0) |>
+      formatCurrency("estimated_total_cost", currency = "$")
+  })
+  output$assumptions_table <- renderDT({
+    datatable(assumptions, rownames = FALSE, options = list(dom = "t"))
+  })
+
+  filtered_transactions <- reactive({
+    dat <- transactions
+    if (!is.null(input$filter_category) && input$filter_category != "All")
+      dat <- dat |> filter(merchant_category == input$filter_category)
+    if (!is.null(input$filter_geo) && input$filter_geo != "All")
+      dat <- dat |> filter(geography == input$filter_geo)
+    if (!is.null(input$filter_label) && input$filter_label != "All")
+      dat <- dat |> filter(is_fraud == if_else(input$filter_label == "Fraud", 1L, 0L))
+    if (!is.null(input$filter_alert) && input$filter_alert != "All")
+      dat <- dat |> filter(xgboost_predicted == if_else(input$filter_alert == "Alert", 1L, 0L))
+    dat |>
+      transmute(transaction_id, merchant_category, amount, geography, time_of_day,
+                xgboost_probability, xgboost_predicted, anomaly_score,
+                is_fraud) |>
+      arrange(desc(xgboost_probability))
+  })
+  output$transaction_table <- renderDT({
+    datatable(filtered_transactions(), rownames = FALSE,
+              filter = "top", options = list(pageLength = 15, scrollX = TRUE)) |>
+      formatPercentage("xgboost_probability", digits = 1) |>
+      formatStyle("is_fraud",
+        target = "row",
+        backgroundColor = styleEqual(c(0, 1), c("white", "#fde8e8")))
   })
 }
 
