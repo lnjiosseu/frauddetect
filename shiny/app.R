@@ -340,13 +340,24 @@ server <- function(input, output, session) {
       labs(x = NULL, y = "Score", fill = NULL) + theme_minimal()
   })
   output$model_table <- renderDT({
-    datatable(model_metrics, rownames = FALSE,
-              options = list(pageLength = 5, dom = "tip", scrollX = TRUE,
-                             autoWidth = FALSE)) |>
-      formatRound(c("threshold_selected_on_validation", "test_roc_auc", "test_pr_auc"),
-                  digits = 3) |>
-      formatPercentage(c("precision", "recall", "specificity", "false_positive_rate",
-                         "test_fraud_prevalence"), digits = 1)
+    display_metrics <- model_metrics |>
+      select(model, test_roc_auc, test_pr_auc, precision, recall, specificity) |>
+      rename(
+        `Model` = model,
+        `ROC-AUC` = test_roc_auc,
+        `PR-AUC` = test_pr_auc,
+        `Precision` = precision,
+        `Recall` = recall,
+        `Specificity` = specificity
+      )
+    datatable(display_metrics, rownames = FALSE,
+              options = list(pageLength = 5, dom = "tip",
+                             autoWidth = TRUE, columnDefs = list(
+                               list(width = "22%", targets = 0),
+                               list(width = "15%", targets = 1:5)
+                             ))) |>
+      formatRound(c("ROC-AUC", "PR-AUC"), digits = 3) |>
+      formatPercentage(c("Precision", "Recall", "Specificity"), digits = 1)
   })
 
   importance_path <- file.path(out_dir, "rf_variable_importance.csv")
