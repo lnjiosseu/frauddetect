@@ -134,6 +134,23 @@ ui <- page_navbar(
       .financial-note { line-height: 1.45; margin-top: .75rem; }
       #cost_plot { display: block; width: 100%; min-height: 440px; }
       #cost_plot .shiny-plot-output { min-height: 440px; }
+      .model-summary-note { border-left: 4px solid #2874a6; background: #f3f7fa;
+        padding: .8rem 1rem; border-radius: .25rem; margin-top: .5rem; }
+      .sensitivity-table-wrap { overflow-x: auto; }
+      .sensitivity-table-wrap table { width: 100%; table-layout: auto; }
+      .sensitivity-table-wrap th { background: #243447; color: #fff;
+        font-weight: 600; white-space: nowrap; }
+      .sensitivity-table-wrap td { vertical-align: middle; }
+      .explorer-intro { display: flex; justify-content: space-between;
+        gap: 1rem; align-items: center; flex-wrap: wrap; margin: .25rem 0 1rem; }
+      .explorer-intro p { margin: 0; }
+      #transaction_table table { font-size: .9rem; }
+      #transaction_table th { white-space: nowrap; }
+      #transaction_table td { vertical-align: middle; }
+      .section-kpi { border: 1px solid #d9dee3; border-radius: .5rem;
+        background: #f8fafc; padding: .8rem 1rem; min-height: 84px; }
+      .section-kpi strong { display: block; font-size: 1.25rem; color: #243447; }
+      .section-kpi span { color: #657786; font-size: .82rem; }
     ")),
     tags$p("Corrected R pipeline | Held-out test evaluation | Simulated transaction data",
            class = "text-muted small mb-2")
@@ -185,16 +202,19 @@ ui <- page_navbar(
 
   nav_panel("Predictive Modeling",
     layout_columns(
-      col_widths = c(5, 7),
+      col_widths = c(6, 6),
       card(card_header("Held-out model comparison"),
-           plotOutput("model_auc", height = 300),
-           p(class = "text-muted small",
-             "ROC-AUC and PR-AUC are shown separately. PR-AUC is particularly informative when fraud is uncommon.")),
+           plotOutput("model_auc", height = 330),
+           div(class = "model-summary-note",
+             strong("Model selection: "),
+             "XGBoost is the leading candidate on this held-out test set, with the highest ROC-AUC and PR-AUC of the three models.")),
       card(card_header("Model performance metrics"),
            DTOutput("model_table"))
     ),
     card(card_header("Random Forest permutation importance"),
-         plotOutput("feature_importance", height = 380))
+         plotOutput("feature_importance", height = 380),
+         p(class = "text-muted small",
+           "Permutation importance measures the reduction in model performance when a feature is shuffled. It describes this fitted Random Forest, not causal influence."))
   ),
 
   nav_panel("Anomaly Policies",
@@ -243,22 +263,32 @@ ui <- page_navbar(
       ),
       nav_panel("Sensitivity & Assumptions",
         card(
-          card_header("Sensitivity analysis"),
+          card_header("Sensitivity analysis across operating assumptions"),
           p(class = "text-muted small",
-            "Lowest estimated-cost policy for each review-cost and recovery scenario, after applying the investigation-capacity limit."),
-          tableOutput("sensitivity_table")
+            "The lowest estimated-cost policy is selected separately for each review-cost and recovery scenario, after enforcing the investigation-capacity limit."),
+          div(class = "sensitivity-table-wrap", tableOutput("sensitivity_table"))
         ),
-        card(
-          card_header("Modeling assumptions and limitations"),
-          tableOutput("assumptions_table"),
-          p(class = "text-muted small financial-note",
-            "These are scenario estimates, not measured bank losses, actual recoveries, or verified operational costs. Transaction amount is used as a proxy for fraud exposure. Validate assumptions with institution-specific data before operational use.")
+        layout_columns(
+          col_widths = c(5, 7),
+          card(card_header("Modeling assumptions"),
+               tableOutput("assumptions_table")),
+          card(card_header("How to interpret these estimates"),
+            p("These are scenario estimates, not measured bank losses, actual recoveries, or verified operational costs."),
+            p("Transaction amount is used as a proxy for fraud exposure. The recovery share is an assumption applied to detected fraud exposure."),
+            p("Validate review costs, loss severity, and recovery rates with institution-specific data before operational use.")
+          )
         )
+      )
       )
     )
   ),
 
   nav_panel("Transaction Explorer",
+    div(class = "explorer-intro",
+      p(class = "text-muted",
+        "Explore only the held-out test transactions. Filters update the records below; model scores are predictions, while actual outcome is the known simulated label."),
+      p(class = "small text-muted", textOutput("explorer_count", inline = TRUE))
+    ),
     layout_columns(
       col_widths = c(3, 3, 3, 3),
       selectInput("filter_category", "Merchant category",
@@ -335,14 +365,26 @@ server <- function(input, output, session) {
   output$model_auc <- renderPlot({
     model_metrics |>
       mutate(model = recode(model, Random_Forest = "Random Forest",
-                            Equal_Weight_Blend = "Equal-weight Blend")) |>
+                            Equal_Weight_Blend = "Equal-weight Blend"),
+             model = factor(model, levels = c("Random Forest", "Equal-weight Blend", "XGBoost"))) |>
       select(model, test_roc_auc, test_pr_auc) |>
       pivot_longer(-model, names_to = "metric", values_to = "value") |>
       mutate(metric = recode(metric, test_roc_auc = "ROC-AUC", test_pr_auc = "PR-AUC")) |>
-      ggplot(aes(x = reorder(model, value), y = value, fill = metric)) +
-      geom_col(position = "dodge") + coord_flip() +
+      ggplot(aes(x = model, y = value, fill = metric)) +
+      geom_col(position = position_dodge(width = 0.78), width = 0.68) +
+      geom_text(aes(label = sprintf("%.3f", value)),
+                position = position_dodge(width = 0.78),
+                hjust = -0.12, size = 3.5, fontface = "bold") +
+      coord_flip(clip = "off") +
+      scale_y_continuous(limits = c(0, 0.85),
+                         breaks = seq(0, 0.8, 0.2),
+                         expand = expansion(mult = c(0, 0.12))) +
       scale_fill_manual(values = c("ROC-AUC" = PAL$blue, "PR-AUC" = PAL$amber)) +
-      labs(x = NULL, y = "Score", fill = NULL) + theme_minimal()
+      labs(x = NULL, y = "Held-out test score", fill = NULL) +
+      theme_minimal(base_size = 12) +
+      theme(legend.position = "top",
+            panel.grid.major.y = element_blank(),
+            plot.margin = margin(8, 22, 8, 8))
   })
   output$model_table <- renderDT({
     display_metrics <- model_metrics |>
@@ -350,21 +392,21 @@ server <- function(input, output, session) {
                             Equal_Weight_Blend = "Equal-weight Blend")) |>
       select(model, test_roc_auc, test_pr_auc, precision, recall, specificity) |>
       rename(
-        `Model` = model,
-        `ROC-AUC` = test_roc_auc,
-        `PR-AUC` = test_pr_auc,
-        `Precision` = precision,
-        `Recall` = recall,
-        `Specificity` = specificity
+        `Model` = model, `ROC-AUC` = test_roc_auc, `PR-AUC` = test_pr_auc,
+        `Precision` = precision, `Recall` = recall, `Specificity` = specificity
       )
     datatable(display_metrics, rownames = FALSE,
-              options = list(pageLength = 5, dom = "tip",
-                             autoWidth = TRUE, columnDefs = list(
-                               list(width = "22%", targets = 0),
-                               list(width = "15%", targets = 1:5)
-                             ))) |>
+      options = list(dom = "t", paging = FALSE, ordering = FALSE,
+                     autoWidth = FALSE, columnDefs = list(
+                       list(width = "26%", targets = 0),
+                       list(width = "14.8%", targets = 1:5)
+                     ))) |>
       formatRound(c("ROC-AUC", "PR-AUC"), digits = 3) |>
-      formatPercentage(c("Precision", "Recall", "Specificity"), digits = 1)
+      formatPercentage(c("Precision", "Recall", "Specificity"), digits = 1) |>
+      formatStyle("Model",
+        target = "row",
+        fontWeight = styleEqual("XGBoost", "bold"),
+        backgroundColor = styleEqual("XGBoost", "#eaf4fb"))
   })
 
   importance_path <- file.path(out_dir, "rf_variable_importance.csv")
@@ -461,7 +503,6 @@ server <- function(input, output, session) {
   })
 
   output$sensitivity_table <- renderTable({
-    # Apply the capacity constraint before selecting the lowest-cost policy.
     if (!"alerts" %in% names(sensitivity)) {
       return(data.frame(Note = "Sensitivity output lacks alert counts."))
     }
@@ -472,14 +513,14 @@ server <- function(input, output, session) {
       ungroup() |>
       arrange(review_cost_per_alert, recovery_share_when_detected) |>
       transmute(
-        `Review cost` = dollar(review_cost_per_alert, accuracy = 1),
-        `Recovery assumption` = percent(recovery_share_when_detected, accuracy = 1),
-        `Selected policy` = str_replace_all(strategy, "_", " "),
+        `Review cost per alert` = dollar(review_cost_per_alert, accuracy = 1),
+        `Assumed recovery` = percent(recovery_share_when_detected, accuracy = 1),
+        `Recommended policy` = str_replace_all(strategy, "_", " "),
         `Alerts` = comma(alerts),
         `Estimated total cost` = dollar(estimated_total_cost, accuracy = 1)
       )
     if (nrow(best) == 0) {
-      best <- data.frame(Note = "No policy meets the current investigation capacity. Increase the capacity to view scenario results.")
+      best <- data.frame(Note = "No policy meets the current investigation capacity. Increase capacity to view scenario results.")
     }
     best
   }, striped = TRUE, bordered = FALSE, hover = TRUE,
@@ -519,11 +560,30 @@ server <- function(input, output, session) {
       ) |>
       arrange(desc(`XGBoost probability`))
   })
+  output$explorer_count <- renderText({
+    paste0("Showing ", comma(nrow(filtered_transactions())), " of ",
+           comma(nrow(transactions)), " held-out transactions")
+  })
   output$transaction_table <- renderDT({
     datatable(filtered_transactions(), rownames = FALSE,
-              filter = "top", options = list(pageLength = 15, scrollX = TRUE)) |>
+      filter = "top",
+      options = list(pageLength = 12, lengthMenu = c(12, 25, 50),
+                     scrollX = TRUE, autoWidth = FALSE,
+                     order = list(list(5, "desc")),
+                     columnDefs = list(
+                       list(width = "115px", targets = 0),
+                       list(width = "125px", targets = 1),
+                       list(width = "95px", targets = 2),
+                       list(width = "105px", targets = 3:4),
+                       list(width = "125px", targets = 5:7),
+                       list(width = "115px", targets = 8)
+                     ))) |>
+      formatCurrency("Amount", currency = "$", digits = 2) |>
       formatPercentage("XGBoost probability", digits = 1) |>
       formatRound("Anomaly score", digits = 3) |>
+      formatStyle("XGBoost alert",
+        color = styleEqual(c("Alert", "No alert"), c("#9b2c2c", "#52606d")),
+        fontWeight = styleEqual(c("Alert", "No alert"), c("bold", "normal"))) |>
       formatStyle("Actual outcome",
         target = "row",
         backgroundColor = styleEqual(c("Legitimate", "Fraud"), c("white", "#fde8e8")))
