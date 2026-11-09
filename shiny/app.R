@@ -97,10 +97,14 @@ ui <- page_navbar(
   header = tags$div(
     class = "container-fluid",
     tags$style(HTML("
-      .financial-kpi-card { min-height: 190px !important; height: 190px !important;
-        box-sizing: border-box; padding: 1rem; border: 1px solid #d9dee3;
-        border-radius: .5rem; background: #fff; display: flex;
-        flex-direction: column; justify-content: flex-start;
+      .financial-kpi-row { display: grid !important;
+        grid-template-columns: minmax(0, 5fr) minmax(0, 3fr) minmax(0, 4fr);
+        gap: 1rem; align-items: stretch; margin-bottom: 1rem;
+        width: 100%; }
+      .financial-kpi-card { min-height: 205px !important;
+        height: 205px !important; box-sizing: border-box; padding: 1rem;
+        border: 1px solid #d9dee3; border-radius: .5rem; background: #fff;
+        display: flex; flex-direction: column; justify-content: flex-start;
         gap: .65rem; overflow: visible; }
       .financial-kpi-card .shiny-input-container {
         display: block !important; width: 100% !important; min-height: 74px;
@@ -200,8 +204,7 @@ ui <- page_navbar(
   ),
 
   nav_panel("Financial Impact",
-    layout_columns(
-      col_widths = c(5, 3, 4),
+    div(class = "financial-kpi-row",
       div(class = "financial-kpi-card",
         div(class = "financial-kpi-title", "Investigation capacity"),
         numericInput("capacity", "Maximum alerts",
