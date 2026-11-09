@@ -84,7 +84,7 @@ fmt_num <- function(x) comma(x, accuracy = 1)
 fmt_money <- function(x) dollar(x, accuracy = 1)
 
 # Cost policies and threshold policies share the same strategy names.
-policy_test <- if_policy |> filter(split == "test")
+policy_test <- if_policy |> filter(split == "test") |> distinct(strategy, .keep_all = TRUE)
 if (!"target_validation_alert_rate" %in% names(policy_test)) {
   policy_test$target_validation_alert_rate <- NA_real_
 }
@@ -309,7 +309,9 @@ server <- function(input, output, session) {
   })
   output$pattern_time <- renderPlot({
     fraud_rates(transactions, "time_of_day") |>
-      ggplot(aes(x = reorder(time_of_day, fraud_rate), y = fraud_rate)) +
+      mutate(time_of_day = factor(time_of_day,
+        levels = c("morning", "afternoon", "evening", "night"))) |>
+      ggplot(aes(x = time_of_day, y = fraud_rate)) +
       geom_col(fill = PAL$amber) +
       labs(x = NULL, y = "Fraud rate (%)") + theme_minimal()
   })
