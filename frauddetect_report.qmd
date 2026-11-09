@@ -22,7 +22,7 @@ This report documents the corrected FraudDetect analytical workflow using 10,000
 
 ## Reproducibility and inputs
 
-If `data/transactions.csv` does not exist, generate the simulated dataset first. Then run the corrected pipeline from the repository root before rendering this report:
+If `data/transactions.csv` does not exist, generate the simulated dataset first. Run the commands below from the repository root. The final, leakage-safe analysis outputs used in this report are produced by scripts 01, 04, and 05:
 
 ```r
 source("scripts/01_simulate_data.R")
@@ -32,6 +32,22 @@ source("corrected_r/scripts/05_cost_sensitive_alert_optimization.R")
 ```
 
 The report reads generated CSVs from `corrected_r/outputs/`. It does not rerun the original historical scripts.
+
+## Corrected R script inventory
+
+The `corrected_r/scripts/` directory contains five analytical scripts. They are not all part of the final production-style execution sequence because the later leakage-safe workflow supersedes parts of the earlier exploratory analysis.
+
+| Script | Purpose | Role in the final workflow |
+|---|---|---|
+| `01_modeling.R` | Creates the stratified train/validation/test split, fits Random Forest and XGBoost, selects thresholds on validation data, and evaluates once on the held-out test set. | Core. Run first. |
+| `02_anomaly_detection.R` | Earlier standalone Isolation Forest anomaly-scoring analysis. | Exploratory predecessor. Its output is not used for the final leakage-safe policy results. |
+| `03_anomaly_incremental_value.R` | Compares the earlier anomaly scores with XGBoost predictions to examine incremental alert value. | Exploratory predecessor. Do not use its results as the final leakage-safe comparison. |
+| `04_optimize_anomaly_thresholds.R` | Refits Isolation Forest on training features only, derives alert thresholds from validation scores, and evaluates policies on the held-out test set. | Core. Supersedes the earlier thresholding approach in script 02. |
+| `05_cost_sensitive_alert_optimization.R` | Compares alert policies under review-cost, recovery, and investigation-capacity assumptions. | Core. Run after scripts 01 and 04. |
+
+`00_setup.R` is a package setup helper, not one of the five analytical scripts. It installs the packages required by the corrected analysis and dashboard.
+
+For the headline results in this report, use the core sequence `01_modeling.R` → `04_optimize_anomaly_thresholds.R` → `05_cost_sensitive_alert_optimization.R`. Scripts 02 and 03 are retained for transparency and historical comparison, not as inputs to the final policy evaluation.
 
 ```{r}
 library(tidyverse)
