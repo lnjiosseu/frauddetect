@@ -96,6 +96,26 @@ ui <- page_navbar(
   theme = bs_theme(bootswatch = "flatly", primary = PAL$navy),
   header = tags$div(
     class = "container-fluid",
+    tags$style(HTML("
+      .financial-kpi { min-height: 112px; display: flex; flex-direction: column;
+        justify-content: center; gap: 8px; padding: 4px 2px; }
+      .financial-kpi-value { font-size: clamp(1.35rem, 2vw, 2rem);
+        line-height: 1.2; font-weight: 650; overflow-wrap: anywhere; }
+      .financial-kpi-note { color: #657786; font-size: .88rem; line-height: 1.35; }
+      #sensitivity_table table, #assumptions_table table { width: 100%;
+        table-layout: fixed; margin-bottom: 0; }
+      #sensitivity_table th, #sensitivity_table td,
+      #assumptions_table th, #assumptions_table td {
+        white-space: normal; overflow-wrap: anywhere; vertical-align: middle;
+        padding: .55rem .65rem; }
+      #sensitivity_table th:nth-child(1) { width: 16%; }
+      #sensitivity_table th:nth-child(2) { width: 15%; }
+      #sensitivity_table th:nth-child(3) { width: 29%; }
+      #sensitivity_table th:nth-child(4) { width: 12%; }
+      #sensitivity_table th:nth-child(5) { width: 28%; }
+      #assumptions_table th:first-child, #assumptions_table td:first-child { width: 62%; }
+      .financial-note { line-height: 1.45; margin-top: .75rem; }
+    ")),
     tags$p("Corrected R pipeline | Held-out test evaluation | Simulated transaction data",
            class = "text-muted small mb-2")
   ),
@@ -169,37 +189,51 @@ ui <- page_navbar(
 
   nav_panel("Financial Impact",
     layout_columns(
-      col_widths = c(4, 4, 4),
+      col_widths = c(5, 3, 4),
       card(
         card_header("Investigation capacity"),
-        numericInput("capacity", "Maximum alerts investigators can review",
-                     value = 500, min = 1, max = nrow(transactions), step = 25),
-        p(class = "text-muted small",
-          "Policies above this alert limit are excluded from the cost comparison.")
+        div(class = "financial-kpi",
+          numericInput("capacity", "Maximum alerts investigators can review",
+                       value = 500, min = 1, max = nrow(transactions), step = 25),
+          p(class = "financial-kpi-note",
+            "Policies above this alert limit are excluded.")
+        )
       ),
       card(
         card_header("Review cost per alert"),
-        h3(textOutput("review_assumption", inline = TRUE)),
-        p(class = "text-muted small",
-          "Illustrative investigation cost assumption.")
+        div(class = "financial-kpi",
+          div(class = "financial-kpi-value",
+              textOutput("review_assumption", inline = TRUE)),
+          p(class = "financial-kpi-note", "Illustrative investigation cost.")
+        )
       ),
       card(
         card_header("Recovery assumption"),
-        h3(textOutput("recovery_assumption", inline = TRUE)),
-        p(class = "text-muted small",
-          "Assumed share of detected fraud exposure prevented or recovered.")
+        div(class = "financial-kpi",
+          div(class = "financial-kpi-value",
+              textOutput("recovery_assumption", inline = TRUE)),
+          p(class = "financial-kpi-note",
+            "Assumed share of detected fraud exposure prevented or recovered.")
+        )
       )
     ),
-    card(card_header("Lowest estimated-cost policies within capacity"),
-         plotOutput("cost_plot", height = 330),
-         DTOutput("cost_table")),
-    card(card_header("Sensitivity analysis"),
-         p("The preferred policy can change when investigation cost and assumed recovery rates change. The capacity filter is applied before selecting the lowest-cost policy in each scenario."),
-         DTOutput("sensitivity_table")),
-    card(card_header("Modeling assumptions and limitations"),
-         DTOutput("assumptions_table")),
-    p(class = "text-muted small",
-      "These are scenario estimates, not measured bank losses, recovery rates, or operational costs. Validate assumptions with institution-specific data before operational use.")
+    card(
+      card_header("Lowest estimated-cost policies within capacity"),
+      plotOutput("cost_plot", height = 260),
+      DTOutput("cost_table")
+    ),
+    card(
+      card_header("Sensitivity analysis"),
+      p(class = "text-muted small",
+        "Lowest estimated-cost policy for each review-cost and recovery scenario, after applying the investigation-capacity limit."),
+      tableOutput("sensitivity_table")
+    ),
+    card(
+      card_header("Modeling assumptions and limitations"),
+      tableOutput("assumptions_table"),
+      p(class = "text-muted small financial-note",
+        "These are scenario estimates, not measured bank losses, actual recoveries, or verified operational costs. Transaction amount is used as a proxy for fraud exposure. Validate assumptions with institution-specific data before operational use.")
+    )
   ),
 
   nav_panel("Transaction Explorer",
@@ -371,40 +405,40 @@ server <- function(input, output, session) {
                       "estimated_total_cost"), currency = "$")
   })
 
-  output$sensitivity_table <- renderDT({
-    # Capacity is enforced for every cost/recovery scenario before ranking.
+  output$sensitivity_table <- renderTable({
+    # Apply the capacity constraint before selecting the lowest-cost policy.
     if (!"alerts" %in% names(sensitivity)) {
-      return(datatable(data.frame(Note = "Sensitivity output lacks alert counts.")))
+      return(data.frame(Note = "Sensitivity output lacks alert counts."))
     }
     best <- sensitivity |>
       filter(alerts <= capacity()) |>
       group_by(review_cost_per_alert, recovery_share_when_detected) |>
       slice_min(estimated_total_cost, n = 1, with_ties = FALSE) |>
       ungroup() |>
-      arrange(review_cost_per_alert, recovery_share_when_detected)
-    best |>
-      select(review_cost_per_alert, recovery_share_when_detected,
-             strategy, alerts, true_positives, false_positives,
-             estimated_total_cost) |>
-      datatable(
-        rownames = FALSE,
-        class = "compact stripe hover nowrap",
-        options = list(
-          pageLength = 6, scrollX = TRUE, autoWidth = TRUE,
-          dom = "tip", scrollCollapse = TRUE
-        )
-      ) |>
-      formatPercentage("recovery_share_when_detected", digits = 0) |>
-      formatCurrency(c("review_cost_per_alert", "estimated_total_cost"),
-                     currency = "$")
-  })
-  output$assumptions_table <- renderDT({
-    datatable(
-      assumptions, rownames = FALSE,
-      class = "compact stripe hover nowrap",
-      options = list(dom = "t", scrollX = TRUE, autoWidth = TRUE)
-    )
-  })
+      arrange(review_cost_per_alert, recovery_share_when_detected) |>
+      transmute(
+        `Review cost` = dollar(review_cost_per_alert, accuracy = 1),
+        `Recovery assumption` = percent(recovery_share_when_detected, accuracy = 1),
+        `Selected policy` = str_replace_all(strategy, "_", " "),
+        `Alerts` = comma(alerts),
+        `Estimated total cost` = dollar(estimated_total_cost, accuracy = 1)
+      )
+    if (nrow(best) == 0) {
+      return(data.frame(Note = "No policy meets the current investigation capacity. Increase the capacity to view scenario results."))
+    }
+    best
+  }, striped = TRUE, bordered = FALSE, hover = TRUE,
+  spacing = "s", rownames = FALSE, width = "100%")
+
+  output$assumptions_table <- renderTable({
+    assumptions |>
+      transmute(
+        Assumption = str_replace_all(assumption, "_", " "),
+        Value = as.character(value)
+      )
+  }, striped = TRUE, bordered = FALSE, hover = TRUE,
+  spacing = "s", rownames = FALSE, width = "100%")
+
 
   filtered_transactions <- reactive({
     dat <- transactions
