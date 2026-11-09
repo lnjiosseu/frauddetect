@@ -1,6 +1,6 @@
 ---
 title: "FraudDetect. Corrected Fraud Analytics Report"
-author: "Ludovic Njiosseu, MS Statistics"
+author: "Ludovic Njiosseu, MPH (Biostatistics)"
 date: today
 format:
   html:
