@@ -1,4 +1,4 @@
-# FraudDetect - Financial Transaction Fraud Detection & Risk Analytics
+# FraudDetect: Financial Transaction Fraud Detection & Risk Analytics
 
 FraudDetect is an end-to-end **R portfolio project** exploring fraud classification, anomaly detection, alert-policy design, and investigation economics using simulated financial transactions. It combines statistical modeling with operational trade-offs and an interactive Shiny dashboard.
 
