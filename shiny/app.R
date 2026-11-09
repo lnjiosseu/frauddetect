@@ -170,16 +170,27 @@ ui <- page_navbar(
   nav_panel("Financial Impact",
     layout_columns(
       col_widths = c(4, 4, 4),
-      card(card_header("Investigation capacity"),
-           numericInput("capacity", "Maximum alerts investigators can review",
-                        value = 500, min = 1, max = nrow(transactions), step = 25),
-           textOutput("capacity_status")),
-      card(card_header("Review cost per alert"),
-           textOutput("review_assumption"),
-           p(class = "text-muted small", "Read from the assumptions used to generate the cost analysis.")),
-      card(card_header("Recovery assumption"),
-           textOutput("recovery_assumption"),
-           p(class = "text-muted small", "Illustrative share of detected fraud exposure prevented or recovered."))
+      card(
+        card_header("Investigation capacity"),
+        numericInput("capacity", "Maximum alerts investigators can review",
+                     value = 500, min = 1, max = nrow(transactions), step = 25),
+        p(class = "text-muted small mb-0",
+          "Policies above this alert limit are excluded from the cost comparison.")
+      ),
+      value_box(
+        title = "Review cost per alert",
+        value = textOutput("review_assumption", inline = TRUE),
+        showcase = bsicons::bs_icon("clipboard-check"),
+        theme = "primary",
+        p(class = "small mb-0", "Illustrative investigation cost assumption.")
+      ),
+      value_box(
+        title = "Recovery assumption",
+        value = textOutput("recovery_assumption", inline = TRUE),
+        showcase = bsicons::bs_icon("shield-check"),
+        theme = "success",
+        p(class = "small mb-0", "Assumed share of detected fraud exposure prevented or recovered.")
+      )
     ),
     card(card_header("Lowest estimated-cost policies within capacity"),
          plotOutput("cost_plot", height = 330),
