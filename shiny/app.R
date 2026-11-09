@@ -97,11 +97,16 @@ ui <- page_navbar(
   header = tags$div(
     class = "container-fluid",
     tags$style(HTML("
-      .financial-kpi { min-height: 112px; display: flex; flex-direction: column;
-        justify-content: center; gap: 8px; padding: 4px 2px; }
-      .financial-kpi-value { font-size: clamp(1.35rem, 2vw, 2rem);
-        line-height: 1.2; font-weight: 650; overflow-wrap: anywhere; }
-      .financial-kpi-note { color: #657786; font-size: .88rem; line-height: 1.35; }
+      .financial-kpi-card { min-height: 150px; height: auto; padding: 1rem;
+        border: 1px solid #d9dee3; border-radius: .5rem; background: #fff;
+        display: flex; flex-direction: column; justify-content: flex-start;
+        gap: .65rem; overflow: visible; }
+      .financial-kpi-title { font-size: .95rem; font-weight: 600; color: #344054; }
+      .financial-kpi-value { display: block; font-size: clamp(1.35rem, 1.8vw, 1.8rem);
+        line-height: 1.25; font-weight: 650; overflow-wrap: anywhere; color: #243447; }
+      .financial-kpi-note { color: #657786; font-size: .84rem; line-height: 1.35; margin: 0; }
+      .financial-kpi-card .form-group { margin-bottom: 0; }
+      .financial-kpi-card .form-control { max-width: 100%; }
       #sensitivity_table table, #assumptions_table table { width: 100%;
         table-layout: fixed; margin-bottom: 0; }
       #sensitivity_table th, #sensitivity_table td,
@@ -190,31 +195,25 @@ ui <- page_navbar(
   nav_panel("Financial Impact",
     layout_columns(
       col_widths = c(5, 3, 4),
-      card(
-        card_header("Investigation capacity"),
-        div(class = "financial-kpi",
-          numericInput("capacity", "Maximum alerts investigators can review",
-                       value = 500, min = 1, max = nrow(transactions), step = 25),
-          p(class = "financial-kpi-note",
-            "Policies above this alert limit are excluded.")
-        )
+      div(class = "financial-kpi-card",
+        div(class = "financial-kpi-title", "Investigation capacity"),
+        numericInput("capacity", "Maximum alerts investigators can review",
+                     value = 500, min = 1, max = nrow(transactions), step = 25),
+        p(class = "financial-kpi-note",
+          "Policies above this alert limit are excluded.")
       ),
-      card(
-        card_header("Review cost per alert"),
-        div(class = "financial-kpi",
-          div(class = "financial-kpi-value",
-              textOutput("review_assumption", inline = TRUE)),
-          p(class = "financial-kpi-note", "Illustrative investigation cost.")
-        )
+      div(class = "financial-kpi-card",
+        div(class = "financial-kpi-title", "Review cost per alert"),
+        div(class = "financial-kpi-value",
+            fmt_money(as.numeric(assumptions$value[assumptions$assumption == "cost_per_alert_review"][1]))),
+        p(class = "financial-kpi-note", "Illustrative investigation cost.")
       ),
-      card(
-        card_header("Recovery assumption"),
-        div(class = "financial-kpi",
-          div(class = "financial-kpi-value",
-              textOutput("recovery_assumption", inline = TRUE)),
-          p(class = "financial-kpi-note",
-            "Assumed share of detected fraud exposure prevented or recovered.")
-        )
+      div(class = "financial-kpi-card",
+        div(class = "financial-kpi-title", "Recovery assumption"),
+        div(class = "financial-kpi-value",
+            fmt_pct(as.numeric(assumptions$value[assumptions$assumption == "recovery_share_when_detected"][1]))),
+        p(class = "financial-kpi-note",
+          "Assumed share of detected fraud exposure prevented or recovered.")
       )
     ),
     card(
