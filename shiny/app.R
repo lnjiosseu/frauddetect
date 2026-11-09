@@ -174,22 +174,20 @@ ui <- page_navbar(
         card_header("Investigation capacity"),
         numericInput("capacity", "Maximum alerts investigators can review",
                      value = 500, min = 1, max = nrow(transactions), step = 25),
-        p(class = "text-muted small mb-0",
+        p(class = "text-muted small",
           "Policies above this alert limit are excluded from the cost comparison.")
       ),
-      value_box(
-        title = "Review cost per alert",
-        value = textOutput("review_assumption", inline = TRUE),
-        showcase = bsicons::bs_icon("clipboard-check"),
-        theme = "primary",
-        p(class = "small mb-0", "Illustrative investigation cost assumption.")
+      card(
+        card_header("Review cost per alert"),
+        h3(textOutput("review_assumption", inline = TRUE)),
+        p(class = "text-muted small",
+          "Illustrative investigation cost assumption.")
       ),
-      value_box(
-        title = "Recovery assumption",
-        value = textOutput("recovery_assumption", inline = TRUE),
-        showcase = bsicons::bs_icon("shield-check"),
-        theme = "success",
-        p(class = "small mb-0", "Assumed share of detected fraud exposure prevented or recovered.")
+      card(
+        card_header("Recovery assumption"),
+        h3(textOutput("recovery_assumption", inline = TRUE)),
+        p(class = "text-muted small",
+          "Assumed share of detected fraud exposure prevented or recovered.")
       )
     ),
     card(card_header("Lowest estimated-cost policies within capacity"),
@@ -199,9 +197,9 @@ ui <- page_navbar(
          p("The preferred policy can change when investigation cost and assumed recovery rates change. The capacity filter is applied before selecting the lowest-cost policy in each scenario."),
          DTOutput("sensitivity_table")),
     card(card_header("Modeling assumptions and limitations"),
-         DTOutput("assumptions_table"),
-         p(class = "text-muted small",
-           "These are scenario estimates, not measured bank losses, recovery rates, or operational costs. Validate assumptions with institution-specific data before operational use."))
+         DTOutput("assumptions_table")),
+    p(class = "text-muted small",
+      "These are scenario estimates, not measured bank losses, recovery rates, or operational costs. Validate assumptions with institution-specific data before operational use.")
   ),
 
   nav_panel("Transaction Explorer",
@@ -384,12 +382,28 @@ server <- function(input, output, session) {
       slice_min(estimated_total_cost, n = 1, with_ties = FALSE) |>
       ungroup() |>
       arrange(review_cost_per_alert, recovery_share_when_detected)
-    datatable(best, rownames = FALSE, options = list(pageLength = 12, scrollX = TRUE)) |>
+    best |>
+      select(review_cost_per_alert, recovery_share_when_detected,
+             strategy, alerts, true_positives, false_positives,
+             estimated_total_cost) |>
+      datatable(
+        rownames = FALSE,
+        class = "compact stripe hover nowrap",
+        options = list(
+          pageLength = 6, scrollX = TRUE, autoWidth = TRUE,
+          dom = "tip", scrollCollapse = TRUE
+        )
+      ) |>
       formatPercentage("recovery_share_when_detected", digits = 0) |>
-      formatCurrency("estimated_total_cost", currency = "$")
+      formatCurrency(c("review_cost_per_alert", "estimated_total_cost"),
+                     currency = "$")
   })
   output$assumptions_table <- renderDT({
-    datatable(assumptions, rownames = FALSE, options = list(dom = "t"))
+    datatable(
+      assumptions, rownames = FALSE,
+      class = "compact stripe hover nowrap",
+      options = list(dom = "t", scrollX = TRUE, autoWidth = TRUE)
+    )
   })
 
   filtered_transactions <- reactive({
