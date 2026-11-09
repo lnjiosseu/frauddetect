@@ -1,6 +1,6 @@
 ---
 title: "FraudDetect - Corrected Fraud Analytics Report"
-author: "Ludovic Njiosseu, MS Statistics, NYU"
+author: "Ludovic Njiosseu, MPH (Biostatistics)"
 date: today
 format:
   html:
@@ -58,6 +58,9 @@ model_metrics <- read_csv(file.path(out_dir, "model_comparison.csv"), show_col_t
 policy_metrics <- read_csv(file.path(out_dir, "if_threshold_policy_comparison.csv"), show_col_types = FALSE)
 cost_comparison <- read_csv(file.path(out_dir, "cost_sensitive_policy_comparison.csv"), show_col_types = FALSE)
 cost_sensitivity <- read_csv(file.path(out_dir, "cost_sensitivity_analysis.csv"), show_col_types = FALSE)
+investigation_capacity <- 500L
+feasible_cost_comparison <- cost_comparison |> filter(alerts <= investigation_capacity)
+feasible_cost_sensitivity <- cost_sensitivity |> filter(alerts <= investigation_capacity)
 assumptions <- read_csv(file.path(out_dir, "cost_model_assumptions.csv"), show_col_types = FALSE)
 importance <- read_csv(file.path(out_dir, "rf_variable_importance.csv"), show_col_types = FALSE)
 ```
@@ -146,7 +149,7 @@ Transaction amount is used as a proxy for fraud exposure. Missed-fraud exposure 
 ### Policy comparison
 
 ```{r}
-cost_comparison |>
+feasible_cost_comparison |>
   arrange(estimated_total_cost) |>
   select(strategy, alerts, true_positives, false_positives,
          false_negatives, total_alert_review_cost,
@@ -157,7 +160,7 @@ cost_comparison |>
 ### Sensitivity analysis
 
 ```{r}
-cost_sensitivity |>
+feasible_cost_sensitivity |>
   group_by(review_cost_per_alert, recovery_share_when_detected) |>
   slice_min(estimated_total_cost, n = 1, with_ties = FALSE) |>
   ungroup() |>
@@ -167,7 +170,7 @@ cost_sensitivity |>
   kable(digits = 2, caption = "Lowest estimated-cost policy by scenario")
 ```
 
-Operational capacity is a separate constraint. The Shiny dashboard applies an editable alert-capacity filter before showing feasible policies. Cost rankings are conditional on the assumed review cost, loss severity, recovery share, and available investigation capacity.
+For this report, the feasible-policy comparison uses a default investigation capacity of 500 alerts. Policies above that limit are excluded from the cost comparison and sensitivity ranking. The Shiny dashboard exposes this capacity as an editable control. Cost rankings are conditional on the assumed review cost, loss severity, recovery share, and available investigation capacity.
 
 ## Limitations
 
