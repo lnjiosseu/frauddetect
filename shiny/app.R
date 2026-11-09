@@ -425,12 +425,14 @@ server <- function(input, output, session) {
     dat <- feasible_costs() |> slice_head(n = 8)
     validate(need(nrow(dat) > 0, "No policy meets this alert capacity. Increase capacity."))
     ggplot(dat, aes(x = reorder(str_replace_all(strategy, "_", " "),
-                                estimated_total_cost),
+                                -estimated_total_cost),
                     y = estimated_total_cost)) +
       geom_col(fill = PAL$green, width = 0.68) +
+      geom_text(aes(label = dollar(estimated_total_cost, accuracy = 1)),
+                hjust = -0.12, size = 3.4) +
       coord_flip(clip = "off") +
       scale_y_continuous(labels = label_dollar(),
-                         expand = expansion(mult = c(0, 0.08))) +
+                         expand = expansion(mult = c(0, 0.18))) +
       labs(x = NULL, y = "Estimated total cost") +
       theme_minimal(base_size = 12) +
       theme(
