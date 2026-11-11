@@ -101,17 +101,23 @@ The dashboard reads corrected pipeline outputs from `corrected_r/outputs/`. Run 
 
 ### Dashboard gallery
 
-Dashboard screenshots have **not yet been added to this repository branch**. Once captured from the running corrected Shiny app, save them under `docs/screenshots/` using the filenames below, then replace this checklist with the image gallery.
+The corrected Shiny dashboard is deployed and its seven views are shown below.
 
-| Dashboard section | Screenshot filename |
+| Executive Overview | Fraud Patterns |
 |---|---|
-| Executive Overview | `01-executive-overview.png` |
-| Fraud Patterns | `02-fraud-patterns.png` |
-| Predictive Modeling | `03-predictive-modeling.png` |
-| Anomaly Policies | `04-anomaly-policies.png` |
-| Financial Impact. Cost & Policy Analysis | `05-financial-impact-cost-policy.png` |
-| Financial Impact. Sensitivity & Assumptions | `06-financial-impact-sensitivity.png` |
-| Transaction Explorer | `07-transaction-explorer.png` |
+| ![Executive Overview](docs/screenshots/01-executive-overview.png) | ![Fraud Patterns](docs/screenshots/02-fraud-patterns.png) |
+
+| Predictive Modeling | Anomaly Policies |
+|---|---|
+| ![Predictive Modeling](docs/screenshots/03-predictive-modeling.png) | ![Anomaly Policies](docs/screenshots/04-anomaly-policies.png) |
+
+| Financial Impact: Cost & Policy Analysis | Financial Impact: Sensitivity & Assumptions |
+|---|---|
+| ![Cost and policy analysis](docs/screenshots/05-financial-impact-cost-policy.png) | ![Sensitivity and assumptions](docs/screenshots/06-financial-impact-sensitivity.png) |
+
+**Transaction Explorer**
+
+![Transaction Explorer](docs/screenshots/07-transaction-explorer.png)
 
 ## Quarto analytical report
 
