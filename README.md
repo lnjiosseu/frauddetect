@@ -1,119 +1,75 @@
 # FraudDetect: Financial Transaction Fraud Detection & Risk Analytics
 
-A portfolio project replicating production risk workflows in financial services - built end-to-end in R, covering feature engineering, class-imbalance correction, ensemble modeling, anomaly scoring, and risk segmentation.
+An R portfolio project exploring supervised fraud classification, anomaly detection, alert-policy design, and investigation economics using **simulated financial transactions**.
 
----
+> **Scope:** The dataset is synthetic. Results are a methodological demonstration, not evidence of performance on bank production data. Cost estimates depend on explicit illustrative assumptions and are not realized savings.
 
-## Why This Project Exists
+## Corrected dataset and evaluation
 
-Fraud detection in financial services sits at the intersection of statistical rigor, operational constraints, and business cost trade-offs. False negatives (missed fraud) cost money; false positives (wrongly flagged transactions) cost customers. Most production pipelines balance both through ensemble models, optimal threshold selection, and layered anomaly scoring.
+The corrected workflow evaluates 10,000 simulated transactions, with a stratified 60/20/20 train/validation/test split. The held-out test set contains 2,000 transactions. Thresholds are selected using validation data, not the test set.
 
-This project replicates that full stack - from raw transaction data to a risk-scored dashboard - using only R and standard statistical methods.
+## Held-out test results
 
----
+| Model | ROC-AUC | PR-AUC | Precision | Recall | Specificity |
+|---|---:|---:|---:|---:|---:|
+| Random Forest | 0.694 | 0.165 | 12.42% | 57.14% | 69.68% |
+| XGBoost | **0.752** | **0.211** | **16.09%** | 56.43% | **77.85%** |
+| Equal-weight blend | 0.745 | 0.190 | 15.68% | 55.00% | 77.74% |
 
-## What It Does
+XGBoost has the strongest ROC-AUC and PR-AUC among the three reported candidates. At its validation-selected operating threshold, it flags 491 test transactions: 79 true positives and 412 false positives. This is a high-alert-volume operating point, not a production recommendation.
 
-**Module 1 - Data Simulation**
-- Generates 10,000 realistic financial transactions with merchant category, geography, time-of-day, device signals, and velocity features
-- Embeds fraud-generating logic (international transactions, night activity, device mismatch, prior fraud history) at controlled rates
+The previous README claims of approximately 0.94 ensemble AUC and 31% false-positive-rate reduction are withdrawn. The original implementation used logistic regression and bagged decision stumps, not true Random Forest or XGBoost. Its anomaly scoring was a pedagogical proxy and did not support the claimed false-positive reduction.
 
-**Module 2 - EDA & Feature Engineering**
-- Fraud rate profiling by merchant category, geography, and time of day
-- Amount z-score computation within merchant category groups
-- Feature correlation analysis against fraud label
+## Anomaly policies
 
-**Module 3 - Modeling**
-- Logistic regression and bagged decision stump ensemble (RF proxy)
-- SMOTE-style oversampling to address class imbalance (~5–8% fraud rate)
-- Youden's J threshold optimization for classification
-- Confusion matrix, sensitivity, specificity, and FP rate comparison vs rule-based baseline
+The corrected Isolation Forest workflow fits on training features, derives score cutoffs from validation data, and evaluates frozen policies on the held-out test set.
 
-**Module 4 - Anomaly Scoring & Risk Segmentation**
-- Isolation forest-inspired anomaly scoring (pure base R)
-- Dual-signal anomaly flag (isolation score + amount z-score)
-- Risk tier assignment (High / Medium / Low) and segment-level profiling
+| Test policy | Alerts | Fraud detected | False alerts | Precision | Recall |
+|---|---:|---:|---:|---:|---:|
+| XGBoost | 491 | 79 | 412 | 16.1% | 56.4% |
+| XGBoost OR Isolation Forest, 1% validation target | 493 | 79 | 414 | 16.0% | 56.4% |
+| XGBoost OR Isolation Forest, 2% validation target | 498 | 79 | 419 | 15.9% | 56.4% |
+| XGBoost OR Isolation Forest, 5% validation target | 531 | 83 | 448 | 15.6% | 59.3% |
+| XGBoost OR Isolation Forest, 10% validation target | 567 | 84 | 483 | 14.8% | 60.0% |
 
-**Deliverables**
-- Interactive Shiny dashboard (4 tabs: Overview, Model Performance, Risk Segmentation, Transaction Explorer)
-- Quarto HTML report with reproducible code, tables, and figures
+The broader OR policies detect more fraud at the cost of additional false alerts. The target percentages define validation score cutoffs; they do not guarantee the same alert rate on test data.
 
----
+## Cost-sensitive analysis
 
-## Key Results
+The corrected cost model uses illustrative assumptions: 25 currency units per alert review, loss severity equal to 100% of transaction amount for missed fraud, and an 80% recovery share when detected. Transaction amount is an exposure proxy, not an observed loss. The resulting rankings are conditional scenario analyses, not measured bank economics.
 
-| Finding | Value |
-|---|---|
-| Ensemble AUC-ROC | ~0.94 |
-| FP Rate Reduction vs Amount Rule | ~31% |
-| Risk Tiers | High / Medium / Low segmentation |
-| Top fraud drivers | Device mismatch, international, night, prior flag |
-| Anomaly flags | Top 10% isolation score + \|z\| > 3 |
+## Dashboard and report
 
----
+The corrected six-section Shiny dashboard is in `shiny/app.R` on the `audit/corrected-r-baseline` branch and reads generated files from `corrected_r/outputs/`. Run the corrected scripts before launching it. The original four-tab dashboard remains on `main` as a historical implementation and should not be used to present corrected metrics.
 
-## Methods
-
-| Component | Method |
-|---|---|
-| Class imbalance | Oversampling (SMOTE proxy) |
-| Classification | Logistic regression + bagged stumps ensemble |
-| Threshold selection | Youden's J statistic |
-| Anomaly scoring | Isolation forest proxy (random recursive splits) |
-| Z-score flagging | Within-category amount standardization |
-| Risk segmentation | Merchant × geography × time cross-tabulation |
-| Visualization | ggplot2, Shiny, DT |
-
----
-
-## Project Structure
-
-```
-frauddetect/
-├── scripts/
-│   ├── 01_simulate_data.R      # Transaction dataset generation
-│   ├── 02_eda_features.R       # EDA, fraud profiling, feature correlations
-│   ├── 03_modeling.R           # LR + RF ensemble, AUC-ROC, threshold selection
-│   └── 04_anomaly_risk.R       # Isolation forest, risk scoring, segmentation
-├── data/                       # Generated datasets (git-ignored)
-├── outputs/                    # CSVs: metrics, segments, predictions (git-ignored)
-├── shiny/
-│   └── app.R                   # Interactive dashboard (4 tabs)
-├── frauddetect_report.qmd      # Quarto HTML report
-└── README.md
-```
-
----
-
-## Reproducing the Project
+The Quarto source on this branch documents the corrected analysis. Render locally after running the corrected pipeline:
 
 ```r
-# Install dependencies
-install.packages(c("tidyverse", "pROC", "shiny", "bslib", "bsicons", "DT"))
-
-# Run in order from project root
-source("scripts/01_simulate_data.R")
-source("scripts/02_eda_features.R")
-source("scripts/03_modeling.R")
-source("scripts/04_anomaly_risk.R")
-
-# Launch dashboard
-shiny::runApp("shiny/")
-
-# Render report
 quarto::quarto_render("frauddetect_report.qmd")
 ```
 
----
+## Reproduce the corrected workflow
 
-## Why This Matters for Risk Teams
+From the repository root, ensure `data/transactions.csv` exists. Then run:
 
-The statistical problems this project addresses - class imbalance correction, threshold calibration, layered anomaly scoring, and risk segmentation - are foundational to production fraud and AML pipelines. Building them from first principles in R, without leaning on black-box AutoML packages, demonstrates both the statistical reasoning and the engineering discipline required for regulatory-grade risk work.
+```r
+source("scripts/01_simulate_data.R")
+source("corrected_r/scripts/01_modeling.R")
+source("corrected_r/scripts/04_optimize_anomaly_thresholds.R")
+source("corrected_r/scripts/05_cost_sensitive_alert_optimization.R")
+shiny::runApp("shiny/")
+```
 
----
+The corrected pipeline writes generated files to `corrected_r/outputs/`. These outputs are generated locally and are not committed.
+
+## Limitations
+
+- All data are simulated. Performance may not generalize to real transaction streams.
+- Test estimates are based on a 2,000-row held-out sample and may be uncertain.
+- Synthetic feature importance is not causal evidence.
+- Review cost, loss severity, and recovery assumptions require institution-specific calibration.
+- The dashboard is an analytical demonstration, not a real-time scoring or case-management service.
 
 ## Author
 
-**Ludovic Njiosseu** | MS Biostatistics, NYU | Data Scientist & Statistician  
-5+ years across healthcare, pharma, financial analytics, and consumer products  
-Open to roles in risk analytics, product data science, and applied ML
+**Ludovic Njiosseu** | MPH (Biostatistics), NYU | Data Scientist & Statistician
