@@ -1,0 +1,46 @@
+name: Corrected FraudDetect pipeline
+
+on:
+  push:
+    branches:
+      - audit/corrected-r-baseline
+    paths:
+      - 'corrected_r/**'
+      - 'scripts/**'
+      - 'shiny/**'
+      - 'frauddetect_report.qmd'
+      - '.github/workflows/corrected-pipeline-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce-and-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/corrected-r-baseline
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4.2'
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - name: Install analysis and dashboard packages
+        run: Rscript -e 'source("corrected_r/scripts/00_setup.R")'
+      - name: Generate synthetic transaction input
+        run: Rscript scripts/01_simulate_data.R
+      - name: Fit supervised models
+        run: Rscript corrected_r/scripts/01_modeling.R
+      - name: Evaluate anomaly policies
+        run: Rscript corrected_r/scripts/04_optimize_anomaly_thresholds.R
+      - name: Run cost-sensitive policy analysis
+        run: Rscript corrected_r/scripts/05_cost_sensitive_alert_optimization.R
+      - name: Validate generated outputs and reported metrics
+        run: |
+          Rscript -e 'm <- readr::read_csv("corrected_r/outputs/model_comparison.csv", show_col_types=FALSE); stopifnot(nrow(m)==3, all(c("Random_Forest","XGBoost","Equal_Weight_Blend") %in% m$model), all(is.finite(m$test_roc_auc)), all(m$test_n==2000)); x <- dplyr::filter(m, model=="XGBoost"); stopifnot(nrow(x)==1, abs(x$test_roc_auc-0.752)<0.03, abs(x$test_pr_auc-0.211)<0.04); p <- readr::read_csv("corrected_r/outputs/test_predictions.csv", show_col_types=FALSE); stopifnot(nrow(p)==2000); cat("FraudDetect outputs passed consistency checks.\n")'
+      - name: Render Quarto report
+        run: quarto render frauddetect_report.qmd
+      - name: Smoke-test Shiny app initialization
+        run: Rscript -e 'app <- shiny::shinyAppFile("shiny"); stopifnot(inherits(app, "shiny.appobj")); cat("Shiny app initialized.\n")'
