@@ -40,7 +40,7 @@ The corrected cost model uses illustrative assumptions: 25 currency units per al
 
 ## Dashboard and report
 
-The corrected six-section Shiny dashboard is in `shiny/app.R` on the `audit/corrected-r-baseline` branch and reads generated files from `corrected_r/outputs/`. Run the corrected scripts before launching it. The original four-tab dashboard remains on `main` as a historical implementation and should not be used to present corrected metrics.
+The corrected six-section Shiny dashboard is in `shiny/app.R` on `main` and reads generated files from `corrected_r/outputs/`. Run the corrected scripts before launching it. The original four-tab dashboard remains available on the audit branch as a historical implementation and should not be used to present corrected metrics.
 
 The Quarto source on this branch documents the corrected analysis. Render locally after running the corrected pipeline:
 
