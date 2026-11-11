@@ -42,8 +42,8 @@ The `corrected_r/scripts/` directory contains five analytical scripts. They are 
 | `01_modeling.R` | Creates the stratified train/validation/test split, fits Random Forest and XGBoost, selects thresholds on validation data, and evaluates once on the held-out test set. | Core: Run first. |
 | `02_anomaly_detection.R` | Earlier standalone Isolation Forest anomaly-scoring analysis. | Exploratory predecessor: Its output is not used for the final leakage-safe policy results. |
 | `03_anomaly_incremental_value.R` | Compares the earlier anomaly scores with XGBoost predictions to examine incremental alert value. | Exploratory predecessor: Do not use its results as the final leakage-safe comparison. |
-| `04_optimize_anomaly_thresholds.R` | Refits Isolation Forest on training features only, derives alert thresholds from validation scores, and evaluates policies on the held-out test set. | Core. Supersedes the earlier thresholding approach in script 02. |
-| `05_cost_sensitive_alert_optimization.R` | Compares alert policies under review-cost, recovery, and investigation-capacity assumptions. | Core. Run after scripts 01 and 04. |
+| `04_optimize_anomaly_thresholds.R` | Refits Isolation Forest on training features only, derives alert thresholds from validation scores, and evaluates policies on the held-out test set. | Core: Supersedes the earlier thresholding approach in script 02. |
+| `05_cost_sensitive_alert_optimization.R` | Compares alert policies under review-cost, recovery, and investigation-capacity assumptions. | Core: Run after scripts 01 and 04. |
 
 `00_setup.R` is a package setup helper, not one of the five analytical scripts. It installs the packages required by the corrected analysis and dashboard.
 
